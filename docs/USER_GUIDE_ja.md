@@ -1,4 +1,7 @@
-# plsCamView 使い方ガイド（v0.9.0）
+# plsCamView 使い方ガイド（v0.9.0・2026-10-24 画像追加）
+
+> 本ガイドの UI 画像は、公開版 v0.9.0 のソースそのままを offscreen Qt で描画したものです
+> （実際の Maya 画面のスクリーンショットではありません。UI コードは同一です）。
 
 Maya のメインウィンドウから切り離した、ツールボックス付きのカメラビューです。
 アニメーション作業中に「カメラを固定したビューを別ウィンドウに出し、そのビューで Playblast を撮る」
@@ -99,6 +102,8 @@ plsCamView.show()
 - ツールボックスは境界をドラッグして幅を変えられます。上下左右のどこにでも置けます。
   上下に置くとカードは横に並び、高さは中身に合わせて自動で最小になります（Playblast カードは右端に固定され、常に押せます）。
 
+<p align="center"><img src="images/toolbox_full.png" width="300" alt="toolbox"></p>
+
 ---
 
 ## 6. 基本操作
@@ -109,6 +114,9 @@ plsCamView.show()
 **標準カメラ** スイッチを OFF にすると persp / top / front / side が一覧から消えます。
 
 ### ビューを増やす・並べ替える
+
+<p align="center"><img src="images/views.png" width="360" alt="views"></p>
+
 Views カードの **1〜4** ボタンでビュー数、その下のアイコンで **配置**（横並び / 縦並び / グリッド）を切り替えます。
 グリッドは 2 = 横並び、3 = 上 1 ＋ 下 2、4 = 田の字です。
 設定パネルは 1 つだけで、Show と Shadow は全ビューに適用されます。カメラだけ各ビューで選べます。
@@ -118,7 +126,11 @@ Views カードの **1〜4** ボタンでビュー数、その下のアイコン
 ポップアウトしたウィンドウを閉じると、自動でメインに戻ります。ウィンドウ位置も記憶されます。
 
 ### UI 言語を切り替える
-ツールボックス上部の **Language** で **System / 日本語 / English** を選びます。
+
+<p align="center"><img src="images/language_row.png" width="360" alt="language"></p>
+
+v0.9.0 では **ツールボックス最下部の Language 行** で **System / 日本語 / English** を選びます
+（初版ガイドの「上部」は誤記でした。v0.9.1 以降は最上部のレイアウト切替アイコン行へ移動予定）。
 System は Maya / OS の言語に従います。選択は保存され、**文言は次にウィンドウを開いたときに適用**されます
 （ダイアログや警告は選んだ直後から新しい言語になります）。識別子・ノード名・パスは翻訳しません。
 
@@ -127,6 +139,8 @@ System は Maya / OS の言語に従います。選択は保存され、**文言
 ## 7. ツールボックス
 
 ### Effects
+
+<p align="center"><img src="images/effects.png" width="360" alt="effects"></p>
 見出し右のスイッチで **SSAO・アンチエイリアス・線 AA をまとめて ON/OFF** できます。
 OFF にしても各項目の値は保持され、ON に戻すと復元されます。見出し左の開閉ボタンでカードを畳めます。
 
@@ -137,14 +151,23 @@ OFF にしても各項目の値は保持され、ON に戻すと復元されま�
 > （Renderer > Viewport 2.0 の設定と同じもの）。
 
 ### Shadow
+
+<p align="center"><img src="images/shadow.png" width="360" alt="shadow"></p>
+
 ビューポートの `Lighting > Shadows` の ON/OFF。こちらは **このツールのビューだけ** に効きます。
 
 ### Show
+
+<p align="center"><img src="images/show.png" width="360" alt="show"></p>
+
 **All / None / Polygon** のプリセット ＋ **Joint / NurbsCurve** スイッチ。
 プリセットを押すと Joint / NurbsCurve もそのプリセットに従い（All=両方 ON、None/Polygon=両方 OFF）、
 そこから個別に足したいものをスイッチで ON にします。
 
 ### Gate（レゾリューションゲート）
+
+<p align="center"><img src="images/gate.png" width="360" alt="gate card">
+<img src="images/gate_overlay.png" width="360" alt="gate overlay"></p>
 
 見出し右のスイッチで ON にすると、**レンダー解像度の範囲（レゾリューションゲート）** を
 各ビューの上にオーバーレイ表示します。ゲート矩形はカメラの viewing frustum
@@ -161,7 +184,22 @@ OFF にしても各項目の値は保持され、ON に戻すと復元されま�
 
 ### Guides（構図ガイド）
 
+<p align="center"><img src="images/guides.png" width="360" alt="guides card"></p>
+
 見出し右のスイッチで構図ガイド全体を ON/OFF します（各系統のスイッチはそのまま保持されます）。
+各ガイドの線は次のとおりです（下の比較図は gate_overlay.py の実描画コードによる出力）。
+
+| 三分割 | 比率グリッド（黄金 φ） |
+|---|---|
+| <img src="images/guide_thirds.png" width="320" alt="thirds"> | <img src="images/guide_ratiogrid_golden.png" width="320" alt="ratio grid golden"> |
+
+| 比率グリッド（白銀 √2） | アーマチュア（黄金 φ） |
+|---|---|
+| <img src="images/guide_ratiogrid_silver.png" width="320" alt="ratio grid silver"> | <img src="images/guide_armature_golden.png" width="320" alt="armature golden"> |
+
+| アーマチュア（白銀 √2） | |
+|---|---|
+| <img src="images/guide_armature_silver.png" width="320" alt="armature silver"> | |
 
 | ガイド | 線の意味 |
 |---|---|
@@ -176,6 +214,9 @@ OFF にしても各項目の値は保持され、ON に戻すと復元されま�
 - **色**（三分割 / グリッド / アーマチュアで個別）、**Opacity**、**Width** を調整できます。
 
 ### Playblast
+
+<p align="center"><img src="images/playblast.png" width="360" alt="playblast card"></p>
+
 常に見えているのは **Force Playblast Target / Multi / 完了後に開く / ［Playblast 実行］** だけです。
 解像度や形式などの書き出し設定は **SETTINGS** の中にまとまっていて、見出しをクリックすると開閉します
 （畳んでいるときは見出しの右に「Maya 1920×1080 scene fps」のように現在値が出ます）。

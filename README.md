@@ -17,6 +17,7 @@ Playblast 対象の固定、MP4 書き出しまでを 1 つのウィンドウで
 **バージョン 0.9.0（初回公開版）／ MIT License**
 
 📖 **全機能ガイド**: [日本語](docs/USER_GUIDE_ja.md) ／ **Full user guide**: [English](docs/USER_GUIDE_en.md)
+（2026-10-24: ガイド各節に UI 画像を追加。画像は公開版 v0.9.0 ソースの offscreen Qt 描画です）
 
 <p align="center">
   <img src="docs/toolbox.png" width="360" alt="toolbox">

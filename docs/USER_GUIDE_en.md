@@ -1,4 +1,7 @@
-# plsCamView – User Guide (v0.9.0)
+# plsCamView – User Guide (v0.9.0, images added 2026-10-24)
+
+> UI images in this guide are rendered offscreen with Qt from the published v0.9.0 source
+> (they are not screenshots of a running Maya session; the UI code is identical).
 
 A detached camera viewport for Maya with a docked toolbox. It makes the everyday flow of
 "keep a camera-locked view in its own window and playblast from that view" a one-click,
@@ -108,6 +111,8 @@ Closing the window with × is fine; the current state is saved at that moment.
   Docked top or bottom, the cards flow horizontally and the height shrinks to fit
   (the Playblast card is pinned at the right so the run button is always reachable).
 
+<p align="center"><img src="images/toolbox_full.png" width="300" alt="toolbox"></p>
+
 ---
 
 ## 6. Basics
@@ -119,6 +124,9 @@ manually with the **camera-refresh icon** in the Views card (📷 with ↻).
 Turn the **standard cameras** switch off to hide persp / top / front / side from the list.
 
 ### Adding and arranging views
+
+<p align="center"><img src="images/views.png" width="360" alt="views"></p>
+
 Use the **1–4** buttons in the Views card for the view count and the icons below for the
 **layout** (row / column / grid). Grid: 2 = side by side, 3 = one on top + two below,
 4 = 2×2. There is only one settings panel; Show and Shadow apply to all views. Only the
@@ -130,7 +138,12 @@ Closing the popped-out window returns the view to the main window. Window positi
 remembered.
 
 ### Switching the UI language
-Use **Language** at the top of the toolbox: **System / 日本語 / English**. System follows
+
+<p align="center"><img src="images/language_row.png" width="360" alt="language"></p>
+
+In v0.9.0 the **Language row sits at the bottom of the toolbox**: **System / 日本語 / English**
+(the first edition of this guide said "top" by mistake; from v0.9.1 it moves to the top row
+next to the layout icons). System follows
 Maya / OS language. The choice is saved; **labels are applied the next time the window is
 opened** (dialogs and warnings switch immediately). Identifiers, node names and paths are
 never translated.
@@ -140,6 +153,8 @@ never translated.
 ## 7. Toolbox
 
 ### Effects
+
+<p align="center"><img src="images/effects.png" width="360" alt="effects"></p>
 The switch on the card header toggles **SSAO + anti-aliasing + line AA together** while
 keeping each individual setting (restored when switched back on). The button on the left
 of the header collapses the card.
@@ -151,14 +166,23 @@ of the header collapses the card.
 > viewport in Maya (the same options as Renderer > Viewport 2.0 settings).
 
 ### Shadow
+
+<p align="center"><img src="images/shadow.png" width="360" alt="shadow"></p>
+
 `Lighting > Shadows` on/off — **for this tool's views only**.
 
 ### Show
+
+<p align="center"><img src="images/show.png" width="360" alt="show"></p>
+
 **All / None / Polygon** presets plus **Joint / NurbsCurve** switches. Pressing a preset
 also sets Joint / NurbsCurve to that preset's state (All = both on, None / Polygon = both
 off); switch individual items back on from there.
 
 ### Gate (resolution gate)
+
+<p align="center"><img src="images/gate.png" width="360" alt="gate card">
+<img src="images/gate_overlay.png" width="360" alt="gate overlay"></p>
 
 Turn the switch on the card header on to overlay the **resolution gate** (the render-
 resolution region) on every view. The gate rectangle is computed from the ratio of the
@@ -177,8 +201,23 @@ frustum (render-resolution aspect), and follows camera operations.
 
 ### Guides (composition guides)
 
+<p align="center"><img src="images/guides.png" width="360" alt="guides card"></p>
+
 The switch on the card header toggles all guides at once (each family's own switch is
-preserved).
+preserved). The comparison figures below are rendered by the actual drawing code in
+gate_overlay.py.
+
+| Thirds | Ratio Grid (golden φ) |
+|---|---|
+| <img src="images/guide_thirds.png" width="320" alt="thirds"> | <img src="images/guide_ratiogrid_golden.png" width="320" alt="ratio grid golden"> |
+
+| Ratio Grid (silver √2) | Armature (golden φ) |
+|---|---|
+| <img src="images/guide_ratiogrid_silver.png" width="320" alt="ratio grid silver"> | <img src="images/guide_armature_golden.png" width="320" alt="armature golden"> |
+
+| Armature (silver √2) | |
+|---|---|
+| <img src="images/guide_armature_silver.png" width="320" alt="armature silver"> | |
 
 | Guide | Meaning of the lines |
 |---|---|
@@ -195,6 +234,9 @@ preserved).
 - Per-family **colors** (Thirds / Grid / Armature), **Opacity** and **Width**.
 
 ### Playblast
+
+<p align="center"><img src="images/playblast.png" width="360" alt="playblast card"></p>
+
 Only **Force Playblast Target / Multi / open when done / [Run Playblast]** are always
 visible; everything else lives in the collapsible **SETTINGS** section (while collapsed,
 its header shows the current values, e.g. "Maya 1920×1080 scene fps"). See the next
