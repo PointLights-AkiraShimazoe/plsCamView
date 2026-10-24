@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 430" width="880" height="430" role="img" aria-label="Force Playblast Target が押さえる経路">
+  <style>
+    .t  { font-family: 'Yu Gothic UI','Hiragino Sans','Noto Sans JP',sans-serif; }
+    .title { font-size: 19px; font-weight: 700; fill: #333333; }
+    .concl { font-size: 15px; font-weight: 700; fill: #0A84FF; }
+    .box   { font-size: 15px; fill: #333333; }
+    .boxk  { font-size: 15px; fill: #0A84FF; font-weight: 700; }
+    .edge  { font-size: 13px; fill: #333333; }
+    .n     { fill: #FFFFFF; stroke: #333333; stroke-width: 1.6; }
+    .nk    { fill: #FFFFFF; stroke: #0A84FF; stroke-width: 2; }
+    .ln    { stroke: #333333; stroke-width: 1.6; fill: none; }
+    .lnk   { stroke: #0A84FF; stroke-width: 2; fill: none; }
+  </style>
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#333333"/>
+    </marker>
+    <marker id="ak" markerWidth="9" markerHeight="9" refX="8" refY="4.5" orient="auto">
+      <path d="M0,0 L9,4.5 L0,9 z" fill="#0A84FF"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="880" height="430" fill="#FFFFFF"/>
+  <text class="t title" x="24" y="34">Force Playblast Target が押さえる経路</text>
+
+  <!-- 左列: 呼び出し元 -->
+  <rect class="n" x="24"  y="78"  width="176" height="52" rx="26"/>
+  <text class="t box" x="112" y="110" text-anchor="middle">Maya 標準メニュー</text>
+
+  <rect class="n" x="24"  y="228" width="176" height="52" rx="26"/>
+  <text class="t box" x="112" y="260" text-anchor="middle">外部ツール</text>
+
+  <!-- 中央列: 差し替え点 -->
+  <rect class="nk" x="316" y="78"  width="216" height="52" rx="26"/>
+  <text class="t boxk" x="424" y="110" text-anchor="middle">performPlayblast</text>
+
+  <rect class="nk" x="316" y="196" width="216" height="52" rx="26"/>
+  <text class="t boxk" x="424" y="228" text-anchor="middle">パネル取得</text>
+
+  <rect class="nk" x="316" y="290" width="216" height="52" rx="26"/>
+  <text class="t boxk" x="424" y="322" text-anchor="middle">playblast 実行</text>
+
+  <!-- 右: 対象 -->
+  <rect class="nk" x="652" y="178" width="204" height="76" rx="38"/>
+  <text class="t boxk" x="754" y="212" text-anchor="middle">plsCamView</text>
+  <text class="t boxk" x="754" y="234" text-anchor="middle">のビュー</text>
+
+  <!-- 矢印: 標準メニュー -> performPlayblast -->
+  <path class="ln" d="M200,104 L310,104" marker-end="url(#a)"/>
+  <text class="t edge" x="255" y="94" text-anchor="middle">呼ぶ</text>
+
+  <!-- 外部ツール -> パネル取得 -->
+  <path class="ln" d="M200,246 L310,232" marker-end="url(#a)"/>
+  <text class="t edge" x="255" y="228" text-anchor="middle">問い合せ</text>
+
+  <!-- 外部ツール -> playblast 実行 -->
+  <path class="ln" d="M200,262 L310,310" marker-end="url(#a)"/>
+  <text class="t edge" x="252" y="305" text-anchor="middle">撮影依頼</text>
+
+  <!-- performPlayblast -> ビュー -->
+  <path class="lnk" d="M532,104 L640,190" marker-end="url(#ak)"/>
+  <text class="t edge" x="592" y="132" text-anchor="middle">向ける</text>
+
+  <!-- パネル取得 -> ビュー -->
+  <path class="lnk" d="M532,222 L646,216" marker-end="url(#ak)"/>
+  <text class="t edge" x="590" y="206" text-anchor="middle">返す</text>
+
+  <!-- playblast 実行 -> ビュー -->
+  <path class="lnk" d="M532,316 L640,246" marker-end="url(#ak)"/>
+  <text class="t edge" x="592" y="304" text-anchor="middle">指定する</text>
+
+  <text class="t concl" x="24" y="404">どの経路から実行しても、撮影対象はこのビューになる</text>
+</svg>

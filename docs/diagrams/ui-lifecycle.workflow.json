@@ -1,0 +1,160 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "plsCamView 追従と終了処理",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "motion",
+      "label": "位置・サイズの追従"
+    },
+    {
+      "id": "layout",
+      "label": "レイアウト通知"
+    },
+    {
+      "id": "close",
+      "label": "ウィンドウ終了"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "move",
+      "lane": "motion",
+      "col": 0,
+      "type": "frontend",
+      "label": "Move / Resize"
+    },
+    {
+      "id": "sync",
+      "lane": "motion",
+      "col": 1,
+      "type": "backend",
+      "label": "同じイベントで整列",
+      "sublabel": "_sync_geometry",
+      "width": 170
+    },
+    {
+      "id": "gate",
+      "lane": "motion",
+      "col": 2,
+      "type": "backend",
+      "label": "必要時だけ再計算",
+      "sublabel": "サイズ変更時のゲート",
+      "width": 170
+    },
+    {
+      "id": "paint",
+      "lane": "motion",
+      "col": 3,
+      "type": "frontend",
+      "label": "Qt表示を更新"
+    },
+    {
+      "id": "request",
+      "lane": "layout",
+      "col": 0,
+      "type": "frontend",
+      "label": "Layout / Show"
+    },
+    {
+      "id": "queue",
+      "lane": "layout",
+      "col": 1,
+      "type": "backend",
+      "label": "予約は1件だけ",
+      "sublabel": "所有者付き QTimer"
+    },
+    {
+      "id": "closing",
+      "lane": "close",
+      "col": 0,
+      "type": "frontend",
+      "label": "閉じる"
+    },
+    {
+      "id": "cancel",
+      "lane": "close",
+      "col": 1,
+      "type": "backend",
+      "label": "予約を停止"
+    },
+    {
+      "id": "release",
+      "lane": "close",
+      "col": 2,
+      "type": "backend",
+      "label": "フック・表示を解放",
+      "width": 170
+    }
+  ],
+  "edges": [
+    {
+      "from": "move",
+      "to": "sync"
+    },
+    {
+      "from": "sync",
+      "to": "gate"
+    },
+    {
+      "from": "gate",
+      "to": "paint"
+    },
+    {
+      "from": "request",
+      "to": "queue"
+    },
+    {
+      "from": "queue",
+      "to": "sync",
+      "label": "次のイベント"
+    },
+    {
+      "from": "closing",
+      "to": "cancel"
+    },
+    {
+      "from": "cancel",
+      "to": "release"
+    }
+  ],
+  "mainPath": [
+    "move",
+    "sync",
+    "gate",
+    "paint"
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "実装範囲",
+      "items": [
+        "カメラバーは0/120/400msの補正を保持し、連続予約を1組に統合。",
+        "移動中はゲートのカメラ照会を増やさない。属性変更は従来の200ms周期。",
+        "1.8.1: Move/Resize の filter と Qt 親はビューの現在のトップレベルへ動的に付け替え(_retarget_top。親を旧ウィンドウに残すと破棄時にゲートが道連れで消えるため)。200ms の _poll は再計算に加え位置検証も行う(イベント取りこぼし時の復帰)。周期は変更しない。",
+        "Maya標準の3Dパネルと描画品質は維持。"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "終了と保存",
+      "items": [
+        "描画オーバーライド解除後に旧パネルを破棄。",
+        "CamView / FxViewのフックは閉じる順序に依存せず復元。",
+        "設定は一時ファイル完成後にos.replaceで置換。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "確認の境界",
+      "items": [
+        "実Qtと代役Mayaによる隔離試験は合格。",
+        "実GPUの追従・速度と島添さんの体感確認は未完了。",
+        "DLL・シーン・Undoを変更しないPython候補。"
+      ]
+    }
+  ]
+}

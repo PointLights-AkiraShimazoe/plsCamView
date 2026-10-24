@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "plsCamView 0.9.0 アーキテクチャ",
+    "output": "docs/architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "ui-stack",
+        "label": "UI の組み立て",
+        "focus": [
+          "entry",
+          "ui",
+          "views",
+          "viewport",
+          "style",
+          "qt",
+          "i18n",
+          "maya"
+        ],
+        "note": "cmds.window → paneLayout → modelPanel(Maya) と、その上に載る Qt(ToolBox / CameraBar)の関係。ToolBox の文言は i18n.tr() 経由(1.8.1)"
+      },
+      {
+        "id": "state",
+        "label": "設定と VP2",
+        "focus": [
+          "ui",
+          "settings",
+          "vp2",
+          "maya"
+        ],
+        "note": "settings.json の load/save と hardwareRenderingGlobals への適用"
+      },
+      {
+        "id": "playblast",
+        "label": "Playblast 経路",
+        "focus": [
+          "ui",
+          "pbhook",
+          "mp4blast",
+          "maya",
+          "ffmpeg"
+        ],
+        "note": "Force Playblast Target のフックと、ツール内 Playblast → MP4 の出力"
+      },
+      {
+        "id": "gate",
+        "label": "Gate / 構図ガイド(オーバーレイ)",
+        "focus": [
+          "ui",
+          "overlay",
+          "viewport",
+          "maya"
+        ],
+        "note": "Gate / Guides カード(同階層)の値を OverlayManager が各ビューの GateOverlay へ配る。追従は Move/Resize + _retarget_top(filter と Qt 親) + _poll 位置検証。Playblast には写らない"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "entry",
+      "type": "frontend",
+      "label": "show()",
+      "sublabel": "起動 / 再起動 / API",
+      "pos": [
+        34,
+        430
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "entry"
+    },
+    {
+      "id": "settings",
+      "type": "database",
+      "label": "load() / save()",
+      "sublabel": "settings.json 入出力",
+      "pos": [
+        538,
+        100
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "ui",
+      "type": "frontend",
+      "label": "class PlsCamViewWindow",
+      "sublabel": "ウィンドウ本体 + ToolBox",
+      "pos": [
+        218,
+        430
+      ],
+      "size": [
+        166,
+        64
+      ],
+      "tag": "core"
+    },
+    {
+      "id": "vp2",
+      "type": "backend",
+      "label": "apply_all()",
+      "sublabel": "VP2 の SSAO / AA 適用",
+      "pos": [
+        538,
+        210
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "style",
+      "type": "frontend",
+      "label": "stylesheet()",
+      "sublabel": "QSS / カード / アイコン",
+      "pos": [
+        538,
+        320
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "views",
+      "type": "frontend",
+      "label": "class ViewManager",
+      "sublabel": "複数ビュー / カメラバー",
+      "pos": [
+        538,
+        430
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "qt",
+      "type": "backend",
+      "label": "attach_widget()",
+      "sublabel": "Maya レイアウトへ Qt を載せる",
+      "pos": [
+        538,
+        540
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "pbhook",
+      "type": "security",
+      "label": "install()",
+      "sublabel": "Playblast 対象の固定",
+      "pos": [
+        538,
+        650
+      ],
+      "size": [
+        166,
+        64
+      ],
+      "tag": "Force Playblast Target"
+    },
+    {
+      "id": "mp4blast",
+      "type": "backend",
+      "label": "run()",
+      "sublabel": "Playblast → MP4",
+      "pos": [
+        538,
+        760
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "viewport",
+      "type": "backend",
+      "label": "class ModelViewport",
+      "sublabel": "modelPanel の生成 / 表示制御",
+      "pos": [
+        773,
+        430
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "maya",
+      "type": "external",
+      "label": "外部 (maya.cmds)",
+      "sublabel": "window / modelEditor",
+      "pos": [
+        1000,
+        430
+      ],
+      "size": [
+        147,
+        64
+      ]
+    },
+    {
+      "id": "ffmpeg",
+      "type": "external",
+      "label": "外部 (ffmpeg)",
+      "sublabel": "bin/ffmpeg.exe を subprocess",
+      "pos": [
+        538,
+        870
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "overlay",
+      "type": "frontend",
+      "label": "class GateOverlay",
+      "sublabel": "ゲート / ガイドの透明オーバーレイ",
+      "pos": [
+        773,
+        540
+      ],
+      "size": [
+        166,
+        64
+      ]
+    },
+    {
+      "id": "i18n",
+      "type": "backend",
+      "label": "i18n.py",
+      "sublabel": "UI 言語 システム/日本語/English",
+      "pos": [
+        218,
+        210
+      ],
+      "size": [
+        166,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "scripts/plsCamView パッケージ",
+      "wraps": [
+        "entry",
+        "settings",
+        "ui",
+        "vp2",
+        "style",
+        "views",
+        "qt",
+        "pbhook",
+        "mp4blast",
+        "viewport",
+        "overlay",
+        "i18n"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "entry-ui",
+      "from": "entry",
+      "to": "ui",
+      "label": "Window()",
+      "variant": "emphasis",
+      "labelAt": [
+        185,
+        422
+      ]
+    },
+    {
+      "id": "ui-settings",
+      "from": "ui",
+      "to": "settings",
+      "label": "load / save",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          132
+        ]
+      ],
+      "labelAt": [
+        480,
+        118
+      ]
+    },
+    {
+      "id": "ui-vp2",
+      "from": "ui",
+      "to": "vp2",
+      "label": "apply_all(data)",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          242
+        ]
+      ],
+      "labelAt": [
+        480,
+        228
+      ]
+    },
+    {
+      "id": "ui-style",
+      "from": "ui",
+      "to": "style",
+      "label": "ToolBox 描画",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          352
+        ]
+      ],
+      "labelAt": [
+        480,
+        338
+      ]
+    },
+    {
+      "id": "ui-views",
+      "from": "ui",
+      "to": "views",
+      "label": "ViewManager",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        480,
+        448
+      ]
+    },
+    {
+      "id": "ui-qt",
+      "from": "ui",
+      "to": "qt",
+      "label": "attach_widget",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          572
+        ]
+      ],
+      "labelAt": [
+        480,
+        558
+      ]
+    },
+    {
+      "id": "ui-pbhook",
+      "from": "ui",
+      "to": "pbhook",
+      "label": "install / uninstall",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          682
+        ]
+      ],
+      "labelAt": [
+        480,
+        668
+      ]
+    },
+    {
+      "id": "ui-mp4",
+      "from": "ui",
+      "to": "mp4blast",
+      "label": "run(panel, **opts)",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          792
+        ]
+      ],
+      "labelAt": [
+        480,
+        778
+      ]
+    },
+    {
+      "id": "views-viewport",
+      "from": "views",
+      "to": "viewport",
+      "label": "ModelViewport",
+      "variant": "emphasis",
+      "labelAt": [
+        731,
+        422
+      ]
+    },
+    {
+      "id": "views-style",
+      "from": "views",
+      "to": "style",
+      "label": "CameraBar",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        655,
+        407
+      ]
+    },
+    {
+      "id": "views-qt",
+      "from": "views",
+      "to": "qt",
+      "label": "attach_widget",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        664,
+        517
+      ]
+    },
+    {
+      "id": "viewport-maya",
+      "from": "viewport",
+      "to": "maya",
+      "label": "modelPanel",
+      "variant": "emphasis",
+      "labelAt": [
+        962,
+        422
+      ]
+    },
+    {
+      "id": "vp2-maya",
+      "from": "vp2",
+      "to": "maya",
+      "label": "setAttr",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelAt": [
+        840,
+        228
+      ]
+    },
+    {
+      "id": "pbhook-maya",
+      "from": "pbhook",
+      "to": "maya",
+      "label": "MEL wrap + cmds patch",
+      "variant": "security",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "labelAt": [
+        840,
+        668
+      ]
+    },
+    {
+      "id": "mp4-maya",
+      "from": "mp4blast",
+      "to": "maya",
+      "label": "cmds.playblast",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "right",
+      "via": [
+        [
+          1170,
+          792
+        ],
+        [
+          1170,
+          462
+        ]
+      ],
+      "labelAt": [
+        940,
+        778
+      ]
+    },
+    {
+      "id": "mp4-ffmpeg",
+      "from": "mp4blast",
+      "to": "ffmpeg",
+      "label": "H.264",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        647,
+        847
+      ]
+    },
+    {
+      "id": "ui-overlay",
+      "from": "ui",
+      "to": "overlay",
+      "label": "apply_gate() → set_config",
+      "fromSide": "right",
+      "toSide": "bottom",
+      "via": [
+        [
+          412,
+          462
+        ],
+        [
+          412,
+          630
+        ],
+        [
+          856,
+          630
+        ]
+      ],
+      "labelAt": [
+        774,
+        620
+      ]
+    },
+    {
+      "id": "overlay-viewport",
+      "from": "overlay",
+      "to": "viewport",
+      "label": "M3dView.widget() に追従"
+    },
+    {
+      "id": "overlay-maya",
+      "from": "overlay",
+      "to": "maya",
+      "label": "MFnCamera frustum",
+      "variant": "dashed"
+    },
+    {
+      "id": "ui-i18n",
+      "from": "ui",
+      "to": "i18n",
+      "label": "tr() / set_language",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        309,
+        348
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "起動と更新（継続84・v1.8.3）",
+      "items": [
+        "show() 入口で ロード中 __version__ と ディスクの __init__.py の __version__ を比較。不一致のときだけ restart()（teardown→モジュール破棄→再import）で最新コードで開き直す",
+        "インストール後にシェルフから開くだけで新版になる（import キャッシュで『更新したのに変わらない』の防止。版が同じなら何もしない）"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "UI の構造",
+      "items": [
+        "ウィンドウ本体は cmds.window + paneLayout(2 ペイン)。Qt は ToolBox と CameraBar の描画だけ",
+        "modelPanel は Maya の UI ツリーに置いたまま(Qt へ付け替えると updateModelPanelBar が壊れる)",
+        "Maya ホスト上の Qt は最小サイズを要求しない(要求すると Maya が固まる)",
+        "1.8.1: Gate カード(マスク / 枠 / 内側ゲート)と Guides カード(三分割・黄金/白銀グリッド・アーマチュア・中心、Fit to)は**同階層の独立カード**(本人指示。Gate を畳んでも Guides に届く。設定キーは従来のまま)。gate_overlay.GateOverlay は入力素通しの半透明ツールウィンドウで、各ビューの 3D 領域(M3dView.widget())に追従。移動イベントの filter と **Qt の親**は**ビューの現在のトップレベルへ動的に付け替え**(_retarget_top。親を旧ウィンドウに残すと、その破棄でオーバーレイが道連れに消える寿命問題があるため)、200ms の _poll は位置検証も行う(イベント取りこぼし時の復帰。カメラ属性の変化もここで拾う)。i18n.py で UI 言語(システム/日本語/English)を選択・保存(全カード・CameraBar・ダイアログ・ユーザー向けエラーまで翻訳接続済み。工程ログ/診断出力/値表記は対象外)。保存済み言語は show() とウィンドウ生成の入口でも復元する(_restore_language / PlsCamViewWindow.__init__。ビュー領域のプレースホルダは ToolBox 生成前に作られるため。v1.8.2)。VP2 のレンダラ設定には触れず、Playblast には写らない"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "状態",
+      "items": [
+        "settings.json に全状態(カメラ / 各カード / ドック位置 / 比率 / ウィンドウ位置)を保存",
+        "SSAO / AA は VP2 のグローバル設定。値が変わった属性だけ setAttr",
+        "Shadow / Show は modelEditor 単位(このツールのビューだけ)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Playblast",
+      "items": [
+        "Force ON で performPlayblast(MEL) と cmds/pymel の playblast・getPanel を差し替え、対象ビューへ固定",
+        "ツール内 Playblast は mp4blast.run(): Maya 標準 or PNG 連番 → bin/ffmpeg.exe で MP4",
+        "1.8.0: From Render Settings(mp4blast.run(from_render_settings=True)): 幅/高さ = defaultResolution、カメラの overscan 1.0 / displayResolution / panZoom OFF を一時適用 → レゾリューションゲートぴったりで撮る"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,278 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "plsCamView 0.9.0 使い方の流れ",
+    "output": "docs/workflow.html",
+    "animation": "trace",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "start",
+        "label": "起動からカメラ選択まで",
+        "focus": [
+          "launch",
+          "open",
+          "camera",
+          "views"
+        ],
+        "note": "独立installerは新版を同じ親の一時領域へコピーしてから旧版を退避し、本体と.modを公開。公開失敗は旧版へ復元、復元失敗は退避先を保持して通知。成功後に棚と通常起動へ接続。"
+      },
+      {
+        "id": "setup",
+        "label": "表示と効果の設定",
+        "focus": [
+          "views",
+          "showfx"
+        ],
+        "note": "Show / Shadow はこのツールのビューだけ、Effects(SSAO / AA)は Maya 全体の VP2 設定"
+      },
+      {
+        "id": "export",
+        "label": "Playblast の 2 経路",
+        "focus": [
+          "showfx",
+          "force",
+          "maya_pb",
+          "pb_exec",
+          "video"
+        ],
+        "note": "ツール内実行は単体または複数カメラを順次撮影。複数は配置合成と個別保持を選択。Forceによる外部呼出しは主対象1つ。詳細はmulti-playblast図。"
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "user",
+      "label": "ユーザー"
+    },
+    {
+      "id": "window",
+      "label": "CamView ウィンドウ / カメラバー"
+    },
+    {
+      "id": "toolbox",
+      "label": "ツールボックス"
+    },
+    {
+      "id": "maya",
+      "label": "Maya 標準 / 社内ツール",
+      "variant": "exception"
+    },
+    {
+      "id": "output",
+      "label": "出力"
+    }
+  ],
+  "phases": [
+    {
+      "id": "p1",
+      "label": "起動",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "p2",
+      "label": "設定",
+      "fromCol": 2,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "p3",
+      "label": "Playblast",
+      "fromCol": 4,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "mainPath": [
+    "launch",
+    "open",
+    "camera",
+    "views",
+    "showfx",
+    "pb_exec",
+    "video"
+  ],
+  "nodes": [
+    {
+      "id": "launch",
+      "lane": "user",
+      "col": 0,
+      "type": "frontend",
+      "label": "起動",
+      "sublabel": "シェルフ CamV / show()",
+      "width": 150
+    },
+    {
+      "id": "open",
+      "lane": "window",
+      "col": 1,
+      "type": "frontend",
+      "label": "ビューが開く",
+      "sublabel": "前回の状態を復元",
+      "width": 150
+    },
+    {
+      "id": "camera",
+      "lane": "window",
+      "col": 2,
+      "type": "frontend",
+      "label": "カメラを選ぶ",
+      "sublabel": "バー中央 / < > で順送り",
+      "width": 150
+    },
+    {
+      "id": "views",
+      "lane": "toolbox",
+      "col": 2,
+      "type": "frontend",
+      "label": "VIEWS",
+      "sublabel": "1〜4 / 配置 / ポップアウト",
+      "width": 150
+    },
+    {
+      "id": "showfx",
+      "lane": "toolbox",
+      "col": 3,
+      "type": "frontend",
+      "label": "SHOW / FX / GATE",
+      "sublabel": "表示 / 影 / SSAO・AA / ゲート",
+      "width": 150
+    },
+    {
+      "id": "force",
+      "lane": "toolbox",
+      "col": 4,
+      "type": "security",
+      "label": "Force Playblast Target",
+      "sublabel": "● のビューへ固定",
+      "width": 150,
+      "tag": "ON"
+    },
+    {
+      "id": "maya_pb",
+      "lane": "maya",
+      "col": 4,
+      "type": "external",
+      "label": "標準 Playblast",
+      "sublabel": "Windows > Playblast など",
+      "width": 150
+    },
+    {
+      "id": "pb_exec",
+      "lane": "toolbox",
+      "col": 5,
+      "type": "backend",
+      "label": "Playblast 実行",
+      "sublabel": "Maya 標準 / MP4 / レンダー解像度",
+      "width": 150
+    },
+    {
+      "id": "video",
+      "lane": "output",
+      "col": 5,
+      "type": "database",
+      "label": "動画",
+      "sublabel": "movies/ に出力・完了後に開く",
+      "width": 150
+    },
+    {
+      "id": "close",
+      "lane": "window",
+      "col": 5,
+      "type": "cloud",
+      "label": "閉じる",
+      "sublabel": "全設定を自動保存",
+      "width": 150
+    }
+  ],
+  "edges": [
+    {
+      "from": "launch",
+      "to": "open"
+    },
+    {
+      "from": "open",
+      "to": "camera",
+      "variant": "emphasis"
+    },
+    {
+      "from": "camera",
+      "to": "views"
+    },
+    {
+      "from": "views",
+      "to": "showfx"
+    },
+    {
+      "from": "showfx",
+      "to": "pb_exec",
+      "label": "撮る",
+      "variant": "emphasis"
+    },
+    {
+      "from": "pb_exec",
+      "to": "video"
+    },
+    {
+      "from": "showfx",
+      "to": "force",
+      "label": "外部から撮るとき",
+      "role": "branch",
+      "variant": "security"
+    },
+    {
+      "from": "force",
+      "to": "maya_pb",
+      "variant": "security",
+      "role": "branch"
+    },
+    {
+      "from": "maya_pb",
+      "to": "video",
+      "label": "対象ビューで撮れる",
+      "variant": "dashed",
+      "role": "async"
+    },
+    {
+      "from": "pb_exec",
+      "to": "close",
+      "label": "終了",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "起動と復元",
+      "items": [
+        "起動: シェルフボタン、または `import plsCamView; plsCamView.show()`",
+        "カメラ / 各カードの設定 / 配置 / ツールボックスの位置と幅 / ウィンドウ位置は閉じるときに自動保存され、次回そのまま戻る",
+        "ビューは最大 4。ポップアウトしたウィンドウを閉じるとメインに戻る"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "設定のポイント",
+      "items": [
+        "Effects の見出しスイッチで SSAO / AA / 線 AA を一括 ON/OFF(個別の値は保持)。これは Maya 全体の VP2 設定",
+        "Show / Shadow はこのツールのビューだけに効く",
+        "上下配置にするとカードが横に並び、Playblast カードは右端に固定",
+        "Gate カード(1.8.0): レゾリューションゲートのマスク・枠、内側ゲート 1〜3 本、構図ガイド(三分割 / 黄金・白銀グリッド / アーマチュア / 中心)。画面上のオーバーレイで Playblast には写らない"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Playblast の 2 経路",
+      "items": [
+        "ツール内: SETTINGS で形式(Maya 標準 / MP4)・解像度・FPS などを決めて［Playblast 実行］。畳んでいるときは見出しに現在値が出る",
+        "外部から: Force Playblast Target を ON にすると、Maya 標準メニューや Python 製ツールの Playblast が ● のビューを対象にする",
+        "MP4 は bin/ffmpeg.exe が必要(PATH は見ない)",
+        "From Render Settings: 幅/高さをレンダー設定にし、オーバースキャン無し・パン/ズーム無しで撮る = レゾリューションゲートぴったりの動画"
+      ]
+    }
+  ]
+}

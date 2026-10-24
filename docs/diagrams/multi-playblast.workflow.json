@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "title": "plsCamView 複数カメラ書き出し",
+    "quality_profile": "showcase"
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "連続撮影と公開"
+    },
+    {
+      "id": "failure",
+      "label": "取消・失敗時"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "select",
+      "lane": "main",
+      "type": "frontend",
+      "label": "Multi ONで複数選択",
+      "col": 0,
+      "width": 170,
+      "sublabel": "OFFは1ビュー"
+    },
+    {
+      "id": "snapshot",
+      "lane": "main",
+      "type": "backend",
+      "label": "カメラ・配置固定",
+      "col": 1,
+      "width": 170
+    },
+    {
+      "id": "preflight",
+      "lane": "main",
+      "type": "backend",
+      "label": "出力名・重複照合",
+      "col": 2,
+      "width": 170
+    },
+    {
+      "id": "capture",
+      "lane": "main",
+      "type": "backend",
+      "label": "各カメラを順次撮影",
+      "col": 3,
+      "width": 170
+    },
+    {
+      "id": "compose",
+      "lane": "main",
+      "type": "backend",
+      "label": "合成ON時に配置合成",
+      "col": 4,
+      "width": 170,
+      "sublabel": "Multi ON時だけ表示"
+    },
+    {
+      "id": "publish",
+      "lane": "main",
+      "type": "database",
+      "label": "個別・Multiを公開",
+      "col": 5,
+      "width": 170
+    },
+    {
+      "id": "preserve",
+      "lane": "failure",
+      "type": "database",
+      "label": "途中ファイルを保全",
+      "col": 4,
+      "width": 170
+    }
+  ],
+  "edges": [
+    {
+      "from": "select",
+      "to": "snapshot"
+    },
+    {
+      "from": "snapshot",
+      "to": "preflight"
+    },
+    {
+      "from": "preflight",
+      "to": "capture"
+    },
+    {
+      "from": "capture",
+      "to": "compose"
+    },
+    {
+      "from": "compose",
+      "to": "publish"
+    },
+    {
+      "from": "capture",
+      "to": "preserve",
+      "label": "取消・失敗"
+    },
+    {
+      "from": "compose",
+      "to": "preserve",
+      "label": "合成失敗"
+    }
+  ],
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "mainPath": [
+    "select",
+    "snapshot",
+    "preflight",
+    "capture",
+    "compose",
+    "publish"
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "スイッチの規則",
+      "items": [
+        "新規設定: Multi OFF / 合成 OFF / 個別保持 ON。",
+        "合成はMulti ON、個別保持は合成ONのときだけ表示。",
+        "Multi OFFでは最後に選択した1ビューを保持。既存の保存済み設定は保全。"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "技術確認と本人確認",
+      "items": [
+        "単体経路・選択・表示・出力保全は隔離試験で確認。",
+        "実Mayaの複数カメラ動画と操作感は未確認。"
+      ]
+    }
+  ]
+}
