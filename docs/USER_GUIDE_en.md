@@ -255,13 +255,11 @@ capturing (e.g. polygons-only), so automation behaves as intended.
 
 Not covered / exceptions:
 
-- Tools that call `playblast` / `getPanel` **directly from MEL** (built-in MEL commands
-  cannot be overridden)
-- When the caller passes an explicit `editorPanelName`, **that target is respected**
-- **Query calls are left untouched** (`playblast(activeSoundTrack=True)` etc.)
-- The playblast **option box (□) opens Maya's standard dialog** (only execution is wrapped)
-- Switching off (or closing the window) **restores the wrapped functions and
-  `performPlayblast` completely**
+- Tools that run playblast **directly from MEL** are not covered
+- When a tool **explicitly names its target panel, that choice is respected**
+- **Read-only (query) calls are left untouched**
+- The playblast **option box (□) opens Maya's standard dialog**
+- Switching off (or closing the window) **restores Maya completely**
 
 ### Output (Maya native / MP4)
 Capture with **[Run Playblast]** in the toolbox. Open **SETTINGS** and choose the output

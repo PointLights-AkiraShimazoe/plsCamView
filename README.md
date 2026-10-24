@@ -132,16 +132,12 @@ plsCamView.playblast_mp4()    # ツールボックスの設定で MP4 書き出�
 
 Maya の Playblast は本来「フォーカスのあるパネル」を対象にするため、
 別ウィンドウのビューはクリックしていないと対象になりません。
-このスイッチを ON にすると、**Maya 標準・外部ツールのどちらから実行しても**
-対象がこのビューになるよう、パネル取得（`cmds.playblast(activeEditor=True)` /
-`cmds.getPanel(withFocus=True)`）と実行の両方を押さえます。
+このスイッチを ON にすると、**Maya 標準メニュー・Python 製ツールのどちらから実行しても**、
+Playblast とその前後の表示設定の変更がこのビューに向かいます。
 
-<p align="center">
-  <img src="docs/playblast_routes.svg" width="820" alt="Force Playblast Target が押さえる経路">
-</p>
-
-対象外・例外（MEL 直呼びは捕まえられない、明示指定の尊重、OFF で完全復元など）は
-[ガイド](docs/USER_GUIDE_ja.md#8-playblast) を参照してください。
+制限: MEL から直接 Playblast を呼ぶツールは対象外です。実行側が対象パネルを明示して
+いる場合はその指定を尊重します。スイッチを OFF にする（またはウィンドウを閉じる）と
+完全に元へ戻ります。詳しくは[ガイド](docs/USER_GUIDE_ja.md#8-playblast)へ。
 
 ### MP4 出力と ffmpeg
 
@@ -183,45 +179,12 @@ JSON を直接編集して調整できる項目：
 | キー | 既定 | 内容 |
 |---|---|---|
 | `applyVp2OnStartup` | `true` | 起動時に SSAO / AA を復元適用する。`false` なら Maya の現在値を読むだけ |
-| `playblastMode` | `"direct"` | `"direct"` は常に `editorPanelName` 指定でツール側実行。`"auto"` はフォーカスが効いていれば Maya 標準へ |
-| `forceActivePanel` | `true` | `getPanel(withFocus=True)` などがこのビューを返すようにする |
+| `playblastMode` | `"direct"` | `"direct"` は常にこのツールが対象ビューを指定して撮る。`"auto"` はフォーカス切替が効く環境では Maya 標準の動きに任せる |
+| `forceActivePanel` | `true` | フォーカス中のパネルを調べる方式のツールでも、このビューが対象になるようにする |
 | `playblastVerbose` | `false` | Playblast 周りの詳細ログを Script Editor に出す |
 | `useCopyPanel` | `true` | ビューを既存パネルの複製として作る。`false` で新規パネル作成 |
 | `toolboxPercent` | `26` | ツールボックス側のペイン比率（%） |
 | `language` | `"system"` | UI 言語（`"system"` / `"ja"` / `"en"`） |
-
----
-
-## 実装メモ
-
-Maya で同種のツールを作る人向けの、つまずきどころの記録です。
-
-**modelPanel を Qt のウィンドウへ付け替えてはいけない**
-Maya は UI のフルパスを Qt の親をたどって組み立てるため、`QMainWindow` などに
-移すと `myWindow||paneLayout10|modelPanel10` のように空セグメントが混ざり、
-`updateModelPanelBar` が MEL の構文エラーになってアイコンバーとメニューが
-機能しなくなります。本ツールはウィンドウ自体を `cmds.window` で作り、
-modelPanel は Maya レイアウトの子のままにしています。
-
-**Maya のレイアウトは内部に独自の QLayout を持つ**
-`formLayout` などの QWidget に新しく `QVBoxLayout` を `setLayout` しても Qt に
-無視され、子ウィジェットがサイズ 0 のまま見えなくなります。既存の layout があれば
-それを使い、無ければ作る、という手順が必要です。
-
-**`performPlayblast` をラップするときはシグネチャを合わせる**
-戻り値型や引数が違うと
-`New procedure definition ... has a different argument list and/or return type.`
-の警告が出て、ラッパーが呼ばれません。オリジナルの .mel を読んで
-戻り値型・引数リストを解析し、同じ形で再定義しています。
-
-**パッケージのリロードは親パッケージの属性まで消す**
-`sys.modules` から消しても、親パッケージが属性として古いモジュールを保持しているため、
-`from parent import pkg` が古い方を返します。`restart()` は親側の属性も削除してから
-`importlib.import_module` で読み直します。
-
-**ゲートのオーバーレイは入力を素通しする透明ウィンドウ**
-VP2 のレンダラ設定には触れず、ビューポートの Qt ウィジェットに重ねて追従させます。
-ゲート矩形の計算は `MFnCamera` の viewing frustum と rendering frustum の比です。
 
 ---
 
@@ -231,7 +194,6 @@ VP2 のレンダラ設定には触れず、ビューポートの Qt ウィジェ
 - [User Guide (English)](docs/USER_GUIDE_en.md)
 - [複数カメラ出力（Multi）](docs/MULTI_PLAYBLAST.md)
 - [変更履歴](CHANGELOG.md)
-- 構造図: [アーキテクチャ](docs/architecture.html) / [処理の流れ](docs/workflow.html)（ブラウザで開く）
 
 ## ライセンス
 
