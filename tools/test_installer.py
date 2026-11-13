@@ -1,12 +1,24 @@
 # -*- coding: utf-8 -*-
 """実Mayaを使わず、一時ディレクトリで独立導入と旧版保全を検証。"""
+import importlib
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
 import types
 import unittest
 from unittest.mock import patch
+
+try:
+    import PySide6.QtWidgets  # noqa: F401
+    _HAS_QT = True
+except Exception:
+    try:
+        import PySide2.QtWidgets  # noqa: F401
+        _HAS_QT = True
+    except Exception:
+        _HAS_QT = False
 
 
 class InstallerTests(unittest.TestCase):
@@ -98,6 +110,7 @@ class InstallerTests(unittest.TestCase):
         backups = list(self.dest.parent.glob('.plsCamView-install-*/previous/old.txt'))
         self.assertEqual(len(backups), 1)
         self.assertEqual(backups[0].read_bytes(), b'previous package')
+        self.assertEqual(self.mod.read_bytes(), b'previous module')
 
     # ---- 更新時の利用者配置 ffmpeg の保全(0.9.0: 公開 zip は ffmpeg 非同梱) ----
     def _put_dest_ffmpeg(self, data=b'user ffmpeg'):
@@ -129,7 +142,52 @@ class InstallerTests(unittest.TestCase):
         self.assert_old()
         kept = self.dest / 'scripts' / 'plsCamView' / 'bin' / 'ffmpeg.exe'
         self.assertEqual(kept.read_bytes(), b'user ffmpeg')   # 失敗時も旧版ごと保全
-        self.assertEqual(self.mod.read_bytes(), b'previous module')
+
+    # ---- 0.9.1 レビュー対応: スタイル由来と import 解決先の保証 ----
+    def _purge_camview_modules(self):
+        for m in [m for m in list(sys.modules)
+                  if m == 'plsCamView' or m.startswith('plsCamView.')
+                  or m == 'plsCamViewInstallerBundle' or m.startswith('plsCamViewInstallerBundle.')]:
+            sys.modules.pop(m, None)
+
+    @unittest.skipUnless(_HAS_QT, 'PySide なし(デバイス側)。cloud offscreen で実行')
+    def test_qt_modules_use_bundled_even_if_old_loaded(self):
+        u"""旧 plsCamView がロード済みでも、installer の UI スタイルは同梱版を読み、
+        ロード済みモジュールと sys.path に触れない。"""
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        import shutil as sh
+        real = Path(__file__).resolve().parents[1] / 'scripts' / 'plsCamView'
+        pkg = self.src / 'scripts' / 'plsCamView'
+        for name in ('qt.py', 'style.py'):
+            sh.copy(str(real / name), str(pkg / name))
+        stale = types.ModuleType('plsCamView'); stale.__path__ = ['/stale']
+        stale_style = types.ModuleType('plsCamView.style'); stale_style.MARK = 'OLD'
+        path_before = list(sys.path)
+        self.addCleanup(self._purge_camview_modules)
+        with patch.dict(sys.modules, {'plsCamView': stale, 'plsCamView.style': stale_style}):
+            mods = self.inst._qt_modules()
+            self.assertIsNotNone(mods, u"同梱 qt/style を読めない")
+            qt, style = mods
+            got = Path(style.__file__).resolve()
+            self.assertTrue(str(got).startswith(str(self.src.resolve())),
+                            u"スタイルの由来が同梱版でない: {}".format(got))
+            self.assertIs(sys.modules['plsCamView'], stale)
+            self.assertEqual(sys.modules['plsCamView.style'].MARK, 'OLD')
+            self.assertEqual(sys.path, path_before, u"_qt_modules が sys.path を汚した")
+
+    def test_post_install_import_resolves_to_dest(self):
+        u"""展開元 scripts が sys.path の先頭にあっても、install 後の import plsCamView は
+        導入先(dest)を解決する(__file__ が導入先になる)。"""
+        src_scripts = str(self.src / 'scripts')
+        sys.path.insert(0, src_scripts)
+        self.addCleanup(lambda: sys.path.remove(src_scripts) if src_scripts in sys.path else None)
+        self._purge_camview_modules()
+        self.addCleanup(self._purge_camview_modules)
+        self.assertEqual(self.inst.install(False), str(self.dest))
+        mod = importlib.import_module('plsCamView')
+        got = Path(mod.__file__).resolve()
+        self.assertTrue(str(got).startswith(str(self.dest.resolve())),
+                        u"import が導入先を解決しない: {}".format(got))
 
 
 if __name__ == '__main__':

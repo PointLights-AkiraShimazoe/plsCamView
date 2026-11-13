@@ -12,6 +12,7 @@ import sys
 import tempfile
 from collections import Counter
 
+from . import blastsize
 from . import mp4blast
 from .i18n import tr
 
@@ -162,19 +163,30 @@ def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=N
         for root in desired:
             if os.path.exists(root) or glob.glob(glob.escape(root) + ".*"):
                 raise ValueError(tr(u"出力が既に存在します。別の出力名を指定してください: {}").format(root))
+        # 値の検査は撮影・時刻変更・フォルダ作成の前に、単独 / Multi / Maya 標準+Combine 共通の
+        # mp4blast.normalize_settings で済ませる(fps 未指定 None はシーン値、0 は失敗。
+        # 端数のフレーム範囲は単独と同じく四捨五入)。ffmpeg を使わない Maya 標準(Combine なし)は
+        # fps / crf / preset を検査しない。
+        # 個別の動画も mp4blast.run が実画像の寸法から偶数化する(切り落とさない)。
+        need_encode = bool(combine) or mode == "mp4"
+        try:
+            norm = mp4blast.normalize_settings(
+                options.get("width", 1920), options.get("height", 1080), options.get("fps"),
+                options.get("crf", 18), options.get("preset", "slow"),
+                options.get("start_frame"), options.get("end_frame"),
+                from_render_settings=bool(options.get("from_render_settings")),
+                need_encode=need_encode)
+        except ValueError as e:
+            raise ValueError(tr(u"設定値が不正です: {}").format(e))
+        fps, start, end = norm["fps"], norm["start_frame"], norm["end_frame"]
+        width, height = norm["width"], norm["height"]
+        canvas = blastsize.even_size(width, height)       # 合成キャンバスは偶数へ切り上げ(右/下へ最大 1px)
+        options = dict(options, width=width, height=height, start_frame=start, end_frame=end)
+        if need_encode:
+            options.update(fps=fps, crf=norm["crf"], preset=norm["preset"])
         if not os.path.isdir(directory):
             os.makedirs(directory)
-        fps = options.get("fps") or mp4blast.scene_fps()
-        if not math.isfinite(float(fps)) or float(fps) <= 0:
-            raise ValueError(tr(u"FPSは正の数にしてください。"))
-        start, end = mp4blast.frame_range()
-        start = options.get("start_frame") if options.get("start_frame") is not None else start
-        end = options.get("end_frame") if options.get("end_frame") is not None else end
-        if int(start) != start or int(end) != end or end < start:
-            raise ValueError(tr(u"複数書き出しの範囲は整数フレームの開始≦終了にしてください。"))
-        width, height = (mp4blast.render_settings_size() if options.get("from_render_settings") else
-                         (options.get("width", 1920), options.get("height", 1080)))
-        cells = layout_cells([t["rect"] for t in targets], width, height) if combine else []
+        cells = layout_cells([t["rect"] for t in targets], canvas[0], canvas[1]) if combine else []
         ffmpeg = mp4blast.find_ffmpeg(options.get("ffmpeg_path", "")) if combine or mode == "mp4" else None
         if (combine or mode == "mp4") and not ffmpeg:
             raise ValueError(tr(u"動画合成にはffmpegが必要です: {}").format(mp4blast.bundled_ffmpeg_path()))
@@ -211,6 +223,13 @@ def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=N
                                          options.get("crf", 18), options.get("preset", "slow")), cancelled, progress)
             if not os.path.isfile(combined) or not os.path.getsize(combined):
                 raise RuntimeError(tr(u"合成動画が作成されませんでした。"))
+            got = mp4blast.probe_video_size(ffmpeg, combined)
+            if got is None:
+                # 寸法を確認できない合成動画は公開しない(途中の動画・画像は recovery に保全)
+                raise RuntimeError(tr(u"合成動画の寸法を確認できませんでした(公開しません)。"))
+            if got != canvas:
+                raise RuntimeError(tr(u"合成動画の寸法が想定と違います: {}x{}(想定 {}x{})").format(
+                    got[0], got[1], canvas[0], canvas[1]))
             if cancelled():
                 raise RuntimeError(tr(u"書き出しを取り消しました。"))
         publish = (captures if not combine or keep_individuals else []) + ([combined] if combine else [])
@@ -232,13 +251,24 @@ def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=N
             detail += tr(u"\n出力済み: {}").format(u", ".join(published))
         return False, detail, recovery
     finally:
+        # 現在時刻とフォーカスは撮影のために変えているので必ず戻す。1 件の失敗で
+        # もう一方の復元を止めない。戻せなかったものは黙って捨てずに警告する
+        # （特に currentTime はユーザーの作業位置なので、黙って別フレームに
+        #  置き去りにしない）。
+        restore_failed = []
         if saved_time is not None:
             try:
                 mp4blast.cmds.currentTime(saved_time, edit=True)
-            except Exception:
-                pass
+            except Exception as e:
+                restore_failed.append(u"currentTime={}: {}".format(saved_time, e))
         if saved_focus:
             try:
                 mp4blast.cmds.setFocus(saved_focus)
+            except Exception as e:
+                restore_failed.append(u"setFocus({}): {}".format(saved_focus, e))
+        if restore_failed:
+            try:
+                mp4blast.cmds.warning(u"[plsCamView] 撮影前の状態を元に戻せませんでした"
+                                      u"（手で確認してください）: " + u", ".join(restore_failed))
             except Exception:
                 pass

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-u"""継続84: plsCamView.show() の版検出（ロード中 __version__ vs ディスク）の限定検証。実 Maya ではない。"""
+u"""plsCamView.show() の版検出（ロード中 __version__ vs ディスク）の限定検証。実 Maya ではない。"""
 import pathlib
 import sys
 import types

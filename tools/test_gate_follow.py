@@ -112,7 +112,7 @@ class GateFollow(unittest.TestCase):
                          u"_poll の位置検証がずれを直していない")
 
     # (7) 旧トップレベルの破棄で現ビューのゲートが消えない(Qt 親の付け替え。寿命の弁別点)
-    #     filter だけ移して Qt 親を旧ウィンドウ A に残す実装(継続62 版)では、A の破棄と一緒に
+    #     filter だけ移して Qt 親を旧ウィンドウ A に残す実装(旧版)では、A の破棄と一緒に
     #     オーバーレイの C++ 側が破棄されてゲートが消えるため、この検査で不合格になる。
     def test_survives_old_top_delete(self):
         self.test_follows_after_reparent()
@@ -131,14 +131,14 @@ class GateFollow(unittest.TestCase):
         self.assertEqual(self.ov.geometry(), view_rect(self.view),
                          u"旧トップレベル破棄後にビューへの追従が失われた")
 
-    # (8) 対照: Qt 親を移さない実装(継続62 相当)では同じ手順で道連れ破棄になる
+    # (8) 対照: Qt 親を移さない実装(旧版相当)では同じ手順で道連れ破棄になる
     #     = (7) が修正の有無を実際に弁別できることの証明(製品コードは修正版のまま)。
     def test_old_top_delete_discriminates(self):
         self.ov.detach()
         app.processEvents()
 
         class NoReparent(gate_overlay.GateOverlay):
-            def _retarget_top(self):      # filter だけ移す(継続62 の実装相当)
+            def _retarget_top(self):      # filter だけ移す(旧版の実装相当)
                 try:
                     top = self._view.window()
                 except RuntimeError:

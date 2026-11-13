@@ -152,6 +152,7 @@ class GateOverlay(QtWidgets.QWidget):
         self._cfg = dict(DEFAULTS)
         self._gate = None
         self._last_key = None
+        self._suppressed = False
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
         self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating, True)
@@ -160,10 +161,12 @@ class GateOverlay(QtWidgets.QWidget):
         except Exception:
             pass
         self.setFocusPolicy(QtCore.Qt.NoFocus)
-        self._view.installEventFilter(self)
-        top = self._view.window()
-        if top is not None and top is not self._view:
-            top.installEventFilter(self)
+        # 0.9.1 r6: ビューから最上位までの**祖先すべて**を監視する。ドック幅の変更・ワークスペース内の
+        # パネル移動ではビューは親の中の同じ位置のまま画面位置だけが変わり、ビューにも最上位にも
+        # Move/Resize が届かない(旧実装はここで poll まで置き去り)。途中の祖先の Move/Resize と
+        # 付け替え(ParentChange)を受けて即座に揃える。
+        self._watched = []
+        self._rewatch()
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(self.POLL_MS)
         self._timer.timeout.connect(self._poll)
@@ -177,7 +180,7 @@ class GateOverlay(QtWidgets.QWidget):
     def _retarget_top(self):
         u"""_view の属するトップレベルが変わっていたら(attach 直後の再親付け・ポップアウト・再ドック)、
         eventFilter と Qt の親を新しいトップへ移す。filter を移さないと移動イベントが古いウィンドウに
-        しか届かず、ゲートが置き去りになる(v1.8.1 本人報告「移動するとゲートが遅れて付いてくる」で
+        しか届かず、ゲートが置き去りになる(v1.8.1 報告「移動するとゲートが遅れて付いてくる」で
         修正)。Qt の親も移さないと、旧トップが破棄された時にこのオーバーレイが Qt の親子関係で
         一緒に破棄され、生きているビューのゲートが消える(v1.8.1 の「親は生成時のまま」は
         この寿命問題があり撤回。親を常に現在のトップへ移せば、破棄されるのは非親ウィンドウだけ)。
@@ -189,15 +192,8 @@ class GateOverlay(QtWidgets.QWidget):
             return False
         if top is None or top is self._top:
             return False
-        old = self._top
         self._top = top
-        try:
-            if old is not None and old is not self._view and not _dead(old):
-                old.removeEventFilter(self)
-        except RuntimeError:
-            pass
-        if top is not self._view:
-            top.installEventFilter(self)
+        self._rewatch()          # 旧トップを含む古い祖先の監視を外し、新しい祖先列へ付け替える
         was_visible = self.isVisible()
         try:
             if self.parent() is not top:
@@ -208,6 +204,38 @@ class GateOverlay(QtWidgets.QWidget):
             self.show()          # setParent は hide するので復元
             self.raise_()        # 新しいウィンドウの手前へ一度上げる(アクティブ化はしない)
         return True
+
+    # ------------------------------------------------------------------
+    def _ancestors(self):
+        u"""ビュー自身から最上位ウィンドウまでの祖先列。"""
+        out = []
+        w = self._view
+        while w is not None:
+            out.append(w)
+            if w.isWindow():
+                break
+            w = w.parentWidget()
+        return out
+
+    def _rewatch(self):
+        u"""監視(eventFilter)を現在の祖先列へ合わせる。戻り値: 祖先列。"""
+        try:
+            chain = self._ancestors()
+        except RuntimeError:
+            return []
+        old = list(getattr(self, "_watched", []))
+        for w in old:
+            if w not in chain:
+                try:
+                    if not _dead(w):
+                        w.removeEventFilter(self)
+                except RuntimeError:
+                    pass
+        for w in chain:
+            if w not in old:
+                w.installEventFilter(self)
+        self._watched = chain
+        return chain
 
     # ------------------------------------------------------------------
     def set_config(self, cfg):
@@ -234,12 +262,13 @@ class GateOverlay(QtWidgets.QWidget):
         self._disposed = True
         self._timer.stop()
         self._sync_timer.stop()
-        for widget in (self._view, self._top):
+        for widget in list(getattr(self, "_watched", [])) + [self._view, self._top]:
             try:
-                if widget is not None:
+                if widget is not None and not _dead(widget):
                     widget.removeEventFilter(self)
             except RuntimeError:
                 pass
+        self._watched = []
         self.hide()
         self.deleteLater()
 
@@ -255,8 +284,13 @@ class GateOverlay(QtWidgets.QWidget):
             return False
         t = ev.type()
         if t in (QtCore.QEvent.Resize, QtCore.QEvent.Move):
-            # ドラッグ中は次のイベントループを待たず、画面位置・ゲートを揃える。
+            # ドラッグ中・祖先の移動中も次のイベントループを待たず、画面位置・ゲートを揃える。
             self._sync_geometry()
+        elif t == QtCore.QEvent.ParentChange:
+            # 途中の祖先が付け替えられた: 監視対象の祖先列を作り直してから揃える
+            self._rewatch()
+            if not self._sync_timer.isActive():
+                self._sync_timer.start(0)
         elif t in (QtCore.QEvent.LayoutRequest, QtCore.QEvent.Show,
                  QtCore.QEvent.WindowStateChange, QtCore.QEvent.WindowActivate):
             if not self._sync_timer.isActive():
@@ -321,106 +355,142 @@ class GateOverlay(QtWidgets.QWidget):
             self.update()
 
     # ------------------------------------------------------------------
+    def set_suppressed(self, flag):
+        u"""True の間は何も描かない(VP2 内描画 gate_vp2 がそのパネルを受け持っているときの二重描画防止)。
+        既定は False。設定・位置追従は通常どおり続け、戻せばすぐ描く。"""
+        flag = bool(flag)
+        if flag != self._suppressed:
+            self._suppressed = flag
+            self.update()
+
     def paintEvent(self, event):
-        cfg = self._cfg
         w, h = float(self.width()), float(self.height())
         if w <= 0 or h <= 0:
             return
-        gate = self._gate or (0.0, 0.0, w, h)
-        gx, gy, gw, gh = gate
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
         p.setCompositionMode(QtGui.QPainter.CompositionMode_SourceOver)
-
-        if cfg.get("gateEnabled"):
-            # マスク(ゲート外)
-            mo = float(cfg.get("gateMaskOpacity", 0.6))
-            if mo > 0.0:
-                path = QtGui.QPainterPath()
-                path.addRect(QtCore.QRectF(0, 0, w, h))
-                inner = QtGui.QPainterPath()
-                inner.addRect(QtCore.QRectF(gx, gy, gw, gh))
-                p.fillPath(path.subtracted(inner), _qcolor(cfg.get("gateMaskColor", [0, 0, 0]), mo))
-            # 内側ゲート
-            ens = _per_gate(cfg.get("innerGateEnabled"), DEFAULTS["innerGateEnabled"])
-            pcts = _per_gate(cfg.get("innerGatePercent"), DEFAULTS["innerGatePercent"])
-            cols = _per_gate(cfg.get("innerGateColor"), DEFAULTS["innerGateColor"])
-            ops = _per_gate(cfg.get("innerGateOpacity"), DEFAULTS["innerGateOpacity"])
-            sts = _per_gate(cfg.get("innerGateStroke"), DEFAULTS["innerGateStroke"])
-            fls = _per_gate(cfg.get("innerGateFill"), DEFAULTS["innerGateFill"])
-            dashed = bool(cfg.get("innerGateDashed", True))
-            for k in range(3):
-                if not ens[k]:
-                    continue
-                pct = float(pcts[k]) * 0.01
-                sw, sh = gw * pct, gh * pct
-                sx, sy = gx + (gw - sw) * 0.5, gy + (gh - sh) * 0.5
-                rect = QtCore.QRectF(sx, sy, sw, sh)
-                if fls[k]:
-                    # 塗り: 内側ゲートの外側(レゾリューションゲート内)
-                    outer = QtGui.QPainterPath()
-                    outer.addRect(QtCore.QRectF(gx, gy, gw, gh))
-                    hole = QtGui.QPainterPath()
-                    hole.addRect(rect)
-                    p.fillPath(outer.subtracted(hole), _qcolor(cols[k], ops[k]))
-                if sts[k]:
-                    pen = QtGui.QPen(_qcolor(cols[k], 1.0), 1.0)
-                    if dashed:
-                        pen.setStyle(QtCore.Qt.CustomDashLine)
-                        pen.setDashPattern([6.0, 6.0])
-                    p.setPen(pen)
-                    p.setBrush(QtCore.Qt.NoBrush)
-                    p.drawRect(rect)
-            # 外枠
-            lw = float(cfg.get("gateLineWidth", 1.0))
-            if lw > 0.0:
-                p.setPen(QtGui.QPen(_qcolor(cfg.get("gateLineColor", [1, 1, 1]), 1.0), lw))
-                p.setBrush(QtCore.Qt.NoBrush)
-                p.drawRect(QtCore.QRectF(gx, gy, gw, gh))
-
-        # ---- 構図ガイド ----
-        if cfg.get("guideThirds") or cfg.get("guideGrid") or cfg.get("guideArmature") or cfg.get("guideCenter"):
-            fit = int(cfg.get("guideFit", 0) or 0)
-            fx, fy, fw, fh = gx, gy, gw, gh
-            if 1 <= fit <= 3:
-                pcts = _per_gate(cfg.get("innerGatePercent"), DEFAULTS["innerGatePercent"])
-                pct = float(pcts[fit - 1]) * 0.01
-                fw, fh = gw * pct, gh * pct
-                fx, fy = gx + (gw - fw) * 0.5, gy + (gh - fh) * 0.5
-            elif fit == 4:
-                fx, fy, fw, fh = 0.0, 0.0, w, h
-            R = SILVER if int(cfg.get("guideRatio", 0) or 0) == 1 else GOLDEN
-            a = 1.0 / (1.0 + R)              # グリッド分割位置(黄金 0.382 / 白銀 0.414)
-            e = 1.0 / (1.0 + R * R)          # アーマチュアの目(黄金 0.276 / 白銀 0.333)
-            rc = 1.0 - 1.0 / (R * R)         # reciprocal の着地(黄金 0.618 / 白銀 0.5)
-            op = float(cfg.get("guideOpacity", 0.8))
-            gwd = float(cfg.get("guideWidth", 1.0))
-
-            def seg(x0, y0, x1, y1):
-                return QtCore.QLineF(fx + x0 * fw, fy + y0 * fh, fx + x1 * fw, fy + y1 * fh)
-
-            def draw(lines, rgb):
-                p.setPen(QtGui.QPen(_qcolor(rgb, op), gwd))
-                p.drawLines(lines)
-
-            if cfg.get("guideThirds"):
-                t1, t2 = 1.0 / 3.0, 2.0 / 3.0
-                draw([seg(t1, 0, t1, 1), seg(t2, 0, t2, 1), seg(0, t1, 1, t1), seg(0, t2, 1, t2)],
-                     cfg.get("guideThirdsColor", DEFAULTS["guideThirdsColor"]))
-            if cfg.get("guideGrid"):
-                draw([seg(a, 0, a, 1), seg(1 - a, 0, 1 - a, 1), seg(0, a, 1, a), seg(0, 1 - a, 1, 1 - a)],
-                     cfg.get("guideGridColor", DEFAULTS["guideGridColor"]))
-            if cfg.get("guideArmature"):
-                draw([seg(0, 0, 1, 1), seg(0, 1, 1, 0),
-                      seg(1, 0, rc, 1), seg(0, 0, 1 - rc, 1),       # 右上 → 下辺 / 左上 → 下辺
-                      seg(0, 1, 1 - rc, 0), seg(1, 1, rc, 0),       # 左下 → 上辺 / 右下 → 上辺
-                      seg(e, 0, e, 1), seg(1 - e, 0, 1 - e, 1), seg(0, e, 1, e), seg(0, 1 - e, 1, 1 - e)],
-                     cfg.get("guideArmatureColor", DEFAULTS["guideArmatureColor"]))
-            if cfg.get("guideCenter"):
-                cx, cy, r = fx + fw * 0.5, fy + fh * 0.5, 12.0
-                p.setPen(QtGui.QPen(_qcolor([1, 1, 1], op), gwd))
-                p.drawLines([QtCore.QLineF(cx - r, cy, cx + r, cy), QtCore.QLineF(cx, cy - r, cx, cy + r)])
+        if not self._suppressed:
+            paint_ops(p, build_ops(self._cfg, w, h, self._gate))
         p.end()
+
+
+# --------------------------------------------------------------------------
+#  描画命令リスト(v1.8.4)。「何を描くか」の定義を 1 か所に置き、Qt オーバーレイ(paint_ops)と
+#  VP2 内描画(gate_vp2.replay)が同じリストを再生する。座標はビュー px・左上原点。
+#    ("ring",  outer(x,y,w,h), hole(x,y,w,h), rgb, alpha)         outer から hole を除いた領域を塗る
+#    ("rect",  (x,y,w,h), rgb, alpha, width, dashed)               枠線(塗りなし)
+#    ("lines", [(x0,y0,x1,y1), ...], rgb, alpha, width)            線分
+#  描く順(マスク → 内側ゲート → 外枠 → ガイド)がそのままリストの順。
+# --------------------------------------------------------------------------
+def build_ops(cfg, w, h, gate):
+    ops = []
+    gx, gy, gw, gh = gate or (0.0, 0.0, w, h)
+    if cfg.get("gateEnabled"):
+        # マスク(ゲート外)
+        mo = float(cfg.get("gateMaskOpacity", 0.6))
+        if mo > 0.0:
+            ops.append(("ring", (0.0, 0.0, w, h), (gx, gy, gw, gh), list(cfg.get("gateMaskColor", [0, 0, 0])), mo))
+        # 内側ゲート
+        ens = _per_gate(cfg.get("innerGateEnabled"), DEFAULTS["innerGateEnabled"])
+        pcts = _per_gate(cfg.get("innerGatePercent"), DEFAULTS["innerGatePercent"])
+        cols = _per_gate(cfg.get("innerGateColor"), DEFAULTS["innerGateColor"])
+        ops_ = _per_gate(cfg.get("innerGateOpacity"), DEFAULTS["innerGateOpacity"])
+        sts = _per_gate(cfg.get("innerGateStroke"), DEFAULTS["innerGateStroke"])
+        fls = _per_gate(cfg.get("innerGateFill"), DEFAULTS["innerGateFill"])
+        dashed = bool(cfg.get("innerGateDashed", True))
+        # FX-INNER-GATE-COLOR: 帯ごとに 1 回だけ塗る。帯 = 1 つ外側の有効なゲート(無ければ解像度ゲート)と自分の矩形の間。
+        # 大きい順(同じ大きさは番号順)に並べ、外側の帯から塗る。線は全部の塗りの後に描く(後続の塗りで濁らない)。
+        gates = []
+        for k in range(3):
+            if not ens[k]:
+                continue
+            pct = float(pcts[k]) * 0.01
+            sw, sh = gw * pct, gh * pct
+            sx, sy = gx + (gw - sw) * 0.5, gy + (gh - sh) * 0.5
+            gates.append((pct, k, (sx, sy, sw, sh)))
+        gates.sort(key=lambda t: (-t[0], t[1]))
+        outer = (gx, gy, gw, gh)
+        for pct, k, rect in gates:
+            if fls[k] and rect[2] < outer[2] and rect[3] < outer[3]:
+                ops.append(("ring", outer, rect, list(cols[k]), ops_[k]))
+            if rect[2] < outer[2] and rect[3] < outer[3]:
+                outer = rect                      # 次の(内側の)帯の外枠
+        for pct, k, rect in gates:
+            if sts[k]:
+                ops.append(("rect", rect, list(cols[k]), 1.0, 1.0, dashed))
+        # 外枠
+        lw = float(cfg.get("gateLineWidth", 1.0))
+        if lw > 0.0:
+            ops.append(("rect", (gx, gy, gw, gh), list(cfg.get("gateLineColor", [1, 1, 1])), 1.0, lw, False))
+
+    # ---- 構図ガイド ----
+    if cfg.get("guideThirds") or cfg.get("guideGrid") or cfg.get("guideArmature") or cfg.get("guideCenter"):
+        fit = int(cfg.get("guideFit", 0) or 0)
+        fx, fy, fw, fh = gx, gy, gw, gh
+        if 1 <= fit <= 3:
+            pcts = _per_gate(cfg.get("innerGatePercent"), DEFAULTS["innerGatePercent"])
+            pct = float(pcts[fit - 1]) * 0.01
+            fw, fh = gw * pct, gh * pct
+            fx, fy = gx + (gw - fw) * 0.5, gy + (gh - fh) * 0.5
+        elif fit == 4:
+            fx, fy, fw, fh = 0.0, 0.0, w, h
+        R = SILVER if int(cfg.get("guideRatio", 0) or 0) == 1 else GOLDEN
+        a = 1.0 / (1.0 + R)              # グリッド分割位置(黄金 0.382 / 白銀 0.414)
+        e = 1.0 / (1.0 + R * R)          # アーマチュアの目(黄金 0.276 / 白銀 0.333)
+        rc = 1.0 - 1.0 / (R * R)         # reciprocal の着地(黄金 0.618 / 白銀 0.5)
+        op = float(cfg.get("guideOpacity", 0.8))
+        gwd = float(cfg.get("guideWidth", 1.0))
+
+        def seg(x0, y0, x1, y1):
+            return (fx + x0 * fw, fy + y0 * fh, fx + x1 * fw, fy + y1 * fh)
+
+        def draw(lines, rgb):
+            ops.append(("lines", lines, list(rgb), op, gwd))
+
+        if cfg.get("guideThirds"):
+            t1, t2 = 1.0 / 3.0, 2.0 / 3.0
+            draw([seg(t1, 0, t1, 1), seg(t2, 0, t2, 1), seg(0, t1, 1, t1), seg(0, t2, 1, t2)],
+                 cfg.get("guideThirdsColor", DEFAULTS["guideThirdsColor"]))
+        if cfg.get("guideGrid"):
+            draw([seg(a, 0, a, 1), seg(1 - a, 0, 1 - a, 1), seg(0, a, 1, a), seg(0, 1 - a, 1, 1 - a)],
+                 cfg.get("guideGridColor", DEFAULTS["guideGridColor"]))
+        if cfg.get("guideArmature"):
+            draw([seg(0, 0, 1, 1), seg(0, 1, 1, 0),
+                  seg(1, 0, rc, 1), seg(0, 0, 1 - rc, 1),       # 右上 → 下辺 / 左上 → 下辺
+                  seg(0, 1, 1 - rc, 0), seg(1, 1, rc, 0),       # 左下 → 上辺 / 右下 → 上辺
+                  seg(e, 0, e, 1), seg(1 - e, 0, 1 - e, 1), seg(0, e, 1, e), seg(0, 1 - e, 1, 1 - e)],
+                 cfg.get("guideArmatureColor", DEFAULTS["guideArmatureColor"]))
+        if cfg.get("guideCenter"):
+            cx, cy, r = fx + fw * 0.5, fy + fh * 0.5, 12.0
+            ops.append(("lines", [(cx - r, cy, cx + r, cy), (cx, cy - r, cx, cy + r)], [1, 1, 1], op, gwd))
+    return ops
+
+
+def paint_ops(p, ops):
+    u"""命令リストを QPainter へ(従来の paintEvent と同じ呼び出し列)。"""
+    for op in ops:
+        kind = op[0]
+        if kind == "ring":
+            _, outer, hole, rgb, alpha = op
+            path = QtGui.QPainterPath()
+            path.addRect(QtCore.QRectF(*outer))
+            inner = QtGui.QPainterPath()
+            inner.addRect(QtCore.QRectF(*hole))
+            p.fillPath(path.subtracted(inner), _qcolor(rgb, alpha))
+        elif kind == "rect":
+            _, rect, rgb, alpha, width, dashed = op
+            pen = QtGui.QPen(_qcolor(rgb, alpha), width)
+            if dashed:
+                pen.setStyle(QtCore.Qt.CustomDashLine)
+                pen.setDashPattern([6.0, 6.0])
+            p.setPen(pen)
+            p.setBrush(QtCore.Qt.NoBrush)
+            p.drawRect(QtCore.QRectF(*rect))
+        elif kind == "lines":
+            _, lines, rgb, alpha, width = op
+            p.setPen(QtGui.QPen(_qcolor(rgb, alpha), width))
+            p.drawLines([QtCore.QLineF(*ln) for ln in lines])
 
 
 # --------------------------------------------------------------------------
@@ -432,6 +502,7 @@ class OverlayManager(object):
     def __init__(self):
         self._overlays = {}
         self._cfg = dict(DEFAULTS)
+        self._suppressed = set()      # gate_vp2 が受け持っているパネル(オーバーレイが後から作られても描かない)
 
     def set_config(self, cfg):
         self._cfg = dict(DEFAULTS)
@@ -461,8 +532,30 @@ class OverlayManager(object):
             cmds.warning(u"[plsCamView] " + tr(u"ゲートオーバーレイを作れませんでした: {}").format(e))
             return None
         self._overlays[panel] = ov
+        if panel in self._suppressed:
+            ov.set_suppressed(True)
         self._apply(panel)
         return ov
+
+    def config(self):
+        u"""いま配っている設定(コピー)。gate_vp2 が描くときに読む。"""
+        return dict(self._cfg)
+
+    def set_suppressed(self, panel, flag):
+        u"""panel の Qt オーバーレイの描画だけ止める/戻す(gate_vp2 が受け持つ間の二重描画防止)。
+        パネルの印を先に記録するので、オーバーレイがまだ無くても、後から作られたものも抑止される。
+        適用できたら True。例外は呼び出し側(gate_vp2)が失敗として扱う。"""
+        if flag:
+            self._suppressed.add(panel)
+        else:
+            self._suppressed.discard(panel)
+        ov = self._overlays.get(panel)
+        if ov is not None:
+            ov.set_suppressed(flag)
+        return True
+
+    def is_suppressed(self, panel):
+        return panel in self._suppressed
 
     def remove(self, panel):
         ov = self._overlays.pop(panel, None)
@@ -479,12 +572,15 @@ class OverlayManager(object):
     def refresh(self):
         u"""ビューの作り直し・カメラ切替の後に呼ぶ(消えたパネルを掃除し、残りを再同期)。"""
         for panel in list(self._overlays.keys()):
+            checked = True
             try:
                 alive = cmds.modelPanel(panel, exists=True)
             except Exception:
-                alive = False
+                alive, checked = False, False
             if not alive:
                 self.remove(panel)
+                if checked:                          # 破棄を確認できたときだけ抑止の印も外す(照会失敗では外さない)
+                    self._suppressed.discard(panel)
                 continue
             ov = self._overlays[panel]
             try:

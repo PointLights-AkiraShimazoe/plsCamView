@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 u"""i18n(plsFxView 0.2.21 / plsCamView 1.8.1 共通構造)の限定検証: system 判定の期待分岐 /
-ja・en 表示 / キー欠落 / 実 UI への適用 / 折り畳み要約・設定ラベルの翻訳(継続65) /
+ja・en 表示 / キー欠落 / 実 UI への適用 / 折り畳み要約・設定ラベルの翻訳 /
 language の保存・復元と既存設定の保全。パッケージはこのファイルの位置(ROOT.name)から独立 import
 する(FxView は DLL を生成/load しない。ToolBox は offscreen Qt で生成し、Maya へは接続しない。
 設定ファイルは一時領域のみ)。実 Maya での表示・保存復元の確認はチェックリスト側(これで合格扱いしない)。"""
@@ -61,7 +61,7 @@ class I18n(unittest.TestCase):
 
 
 class SystemResolution(unittest.TestCase):
-    u"""system 判定の期待分岐(継続63): Maya の uiLanguage が ja_* → ja、他 → en、
+    u"""system 判定の期待分岐: Maya の uiLanguage が ja_* → ja、他 → en、
     未対応ロケールは en、取得失敗は QLocale fallback(ja/en のどちらか)。"""
 
     def setUp(self):
@@ -100,7 +100,7 @@ class SystemResolution(unittest.TestCase):
 
 @unittest.skipUnless(PACKAGE == "plsFxView", u"FxView の attach 工程(Loading / 事前コンパイル)")
 class AttachPhase(unittest.TestCase):
-    u"""継続66: ToolBox を通らない起動時表示(__init__ / loading_overlay / fxprecompile)の限定検証。
+    u"""ToolBox を通らない起動時表示(__init__ / loading_overlay / fxprecompile)の限定検証。
     実パッケージの __init__.py を実行して import し(Maya なし・DLL 生成/load なし・接続なし)、
     言語復元のタイミング(_restore_language)と、tr を通すフォーマット文字列の引数整合を確認する。
     中止/失敗時の保全(中止→_precompile_abort→Loading 終了、失敗→接続しない)は tr が文字列生成のみで
@@ -148,7 +148,7 @@ class AttachPhase(unittest.TestCase):
         self.assertTrue(hasattr(self.fxp.Job, "progress_text"))
 
     def test_restore_language_reads_saved_setting(self):
-        u"""attach/show 入口の言語復元(継続66 修正): ToolBox 生成前でも保存済み言語で表示できる。"""
+        u"""attach/show 入口の言語復元(修正): ToolBox 生成前でも保存済み言語で表示できる。"""
         st = importlib.import_module(PACKAGE + '.settings')
         with tempfile.TemporaryDirectory() as td:
             path = os.path.join(td, "settings.json")
@@ -299,12 +299,12 @@ class ToolBoxLanguage(unittest.TestCase):
         self.assertEqual(tb.mp4OpenAfter.text(), u"Open when done")
 
     def test_summary_and_setting_labels_ja(self):
-        u"""継続65 監督指摘: 折り畳み要約と設定ラベル(Force/From Render)も翻訳される。
+        u"""折り畳み要約と設定ラベル(Force/From Render)も翻訳される。
         数値・px は原表記、Maya 標準項目との対応(原名)は tooltip に保持。"""
         _, tb = self._toolbox("ja")
         self.assertEqual(tb.forceChk.text(), u"Playblast 対象を固定")
         self.assertIn(u"Force Playblast Target", tb.forceChk.toolTip())
-        self.assertEqual(tb.mp4FromRender.text(), u"レンダー設定の解像度")
+        self.assertEqual(tb.mp4FromRender.text(), u"レンダー設定")          # g3: 行の見出しが「解像度」なので短く
         self.assertIn(u"From Render Settings", tb.mp4FromRender.toolTip())
         tb._update_gate_summaries()
         self.assertTrue(tb.gateMaskSec._summary.text().startswith(u"マスク "),
@@ -316,7 +316,7 @@ class ToolBoxLanguage(unittest.TestCase):
     def test_summary_and_setting_labels_en(self):
         _, tb = self._toolbox("en")
         self.assertEqual(tb.forceChk.text(), u"Force Playblast Target")
-        self.assertEqual(tb.mp4FromRender.text(), u"From Render Settings")
+        self.assertEqual(tb.mp4FromRender.text(), u"Render Settings")       # g3
         tb._update_gate_summaries()
         self.assertTrue(tb.gateMaskSec._summary.text().startswith(u"mask "))
         self.assertEqual(tb.innerGatesSec._summary.text(), u"off")

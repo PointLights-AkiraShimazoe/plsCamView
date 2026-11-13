@@ -1,7 +1,7 @@
-# plsCamView – User Guide (v0.9.0, images added 2026-10-24)
+# plsCamView – User Guide (v0.9.1)
 
-> UI images in this guide are rendered offscreen with Qt from the published v0.9.0 source
-> (they are not screenshots of a running Maya session; the UI code is identical).
+> UI images in this guide are rendered offscreen with Qt from the actual implementation
+> (they are not screenshots of a running Maya session; the UI code is the same).
 
 A detached camera viewport for Maya with a docked toolbox. It makes the everyday flow of
 "keep a camera-locked view in its own window and playblast from that view" a one-click,
@@ -43,7 +43,13 @@ reliable operation.
 
 1. Unzip the downloaded zip anywhere.
 2. Drag & drop **`plsCamView_install.py`** onto the Maya viewport.
-3. Press **[Install]** in the window that opens.
+3. Press **[インストール] (Install)** in the window that opens.
+
+<p align="center"><img src="images/installer.png" width="420" alt="installer"></p>
+
+The installer is a small dialog with the same look as CamView itself (0.9.1): confirm the
+destination, choose whether to add a shelf button, and press install. Details are shown
+in each item's tooltip.
 
 Done — no Maya restart required. Tick "add a launch button to the current shelf" if you
 want a shelf button.
@@ -122,6 +128,7 @@ Click the camera name in the middle of the camera bar and pick from the list, or
 with **<** / **>**. The list refreshes automatically when a scene is opened; refresh it
 manually with the **camera-refresh icon** in the Views card (📷 with ↻).
 Turn the **standard cameras** switch off to hide persp / top / front / side from the list.
+Pick **＋ New** at the end of the list to create a standard Maya camera and switch only that view to it.
 
 ### Adding and arranging views
 
@@ -137,16 +144,29 @@ camera is per view.
 Closing the popped-out window returns the view to the main window. Window positions are
 remembered.
 
+### Changing the UI size (scale)
+
+<p align="center"><img src="images/ui_scale_menu.png" width="240" alt="ui scale"></p>
+
+The **⚙ (gear)** at the top offers a UI scale of **75 / 85 / 100 / 115 / 125%**
+(default 85%; **Reset to default (85%)** returns to it). Not just the text — buttons, fields,
+icons, margins, click targets and menus all change by the same ratio. The OS display scale is
+never touched, and the viewport rendering, gates and Playblast output size are not affected.
+At 85% or less the toolbox fits a standard right dock (about 1/4 of the window width) without
+horizontal scrolling; at 100% and above, or in narrower docks, a horizontal scrollbar may appear.
+
+The chosen scale is saved and applied **when you pick "Reopen to apply" from the menu,
+or the next time the window is opened** (it never reopens automatically).
+
 ### Switching the UI language
 
-<p align="center"><img src="images/language_row.png" width="360" alt="language"></p>
+<p align="center"><img src="images/toprow_language.png" width="360" alt="language"></p>
 
-In v0.9.0 the **Language row sits at the bottom of the toolbox**: **System / 日本語 / English**
-(the first edition of this guide said "top" by mistake; from v0.9.1 it moves to the top row
-next to the layout icons). System follows
-Maya / OS language. The choice is saved; **labels are applied the next time the window is
-opened** (dialogs and warnings switch immediately). Identifiers, node names and paths are
-never translated.
+The language dropdown sits **at the right end of the top row, next to the layout icons
+and the ⚙ (UI scale) button** (moved there in 0.9.1; the word "Language" is shown in its tooltip):
+**System / 日本語 / English**. System follows Maya / OS language. The choice is saved;
+**labels are applied the next time the window is opened** (dialogs and warnings switch
+immediately). Identifiers, node names and paths are never translated.
 
 ---
 
@@ -160,7 +180,9 @@ keeping each individual setting (restored when switched back on). The button on 
 of the header collapses the card.
 
 - **Screen-space Ambient Occlusion** … Enable / Amount / Radius / Filter Radius / Samples
-- **Anti-aliasing** … Enable / Sample count / Line Anti-aliasing
+- **Adjustment presets** … save the Effects values and on/off states under a name; picking one from the dropdown applies it.
+  **＋** = new preset from the current values, **✓** = update the selected preset with the current values,
+  **↺** = go back to the selected preset's saved values (the saved values are not changed)
 
 > Note: SSAO and AA are Viewport 2.0 **global** settings. Changing them here affects every
 > viewport in Maya (the same options as Renderer > Viewport 2.0 settings).
@@ -237,10 +259,11 @@ gate_overlay.py.
 
 <p align="center"><img src="images/playblast.png" width="360" alt="playblast card"></p>
 
-Only **Force Playblast Target / Multi / open when done / [Run Playblast]** are always
-visible; everything else lives in the collapsible **SETTINGS** section (while collapsed,
-its header shows the current values, e.g. "Maya 1920×1080 scene fps"). See the next
-chapter.
+From top to bottom: **Force Playblast Target** / **Multi** (when on, Merge and Keep each appear to its right) /
+**Time Range** / **Output** / **SETTINGS** (collapsible) / **Capture options** (collapsible) /
+**Open when done · Keep PNGs** / **[Run Playblast]**. Toggling a switch never moves the other
+controls or adds rows. The export settings you rarely change live in **SETTINGS**; while collapsed,
+its header shows the current values, e.g. "MP4 · 1920×1080 · 24fps(scene) · CRF 18". See the next chapter.
 
 ---
 
@@ -262,33 +285,44 @@ Not covered / exceptions:
 - Switching off (or closing the window) **restores Maya completely**
 
 ### Output (Maya native / MP4)
-Capture with **[Run Playblast]** in the toolbox. Open **SETTINGS** and choose the output
-format, **Maya native / MP4**; the export settings are shared by both formats.
+Capture with **[Run Playblast]** in the toolbox (the same button for every format).
+
+**Always visible (per shot)**
 
 | Item | Meaning |
 |---|---|
-| Width / Height | output resolution (default 1920×1080) |
-| FPS / scene | movie frame rate; "scene" derives it from the scene time unit |
-| Quality | playblast quality (1–100) |
-| CRF | H.264 quality; lower = better/larger (18–23 recommended) — MP4 only |
-| Preset | x264 encoding speed (slower = smaller at the same CRF) — MP4 only |
-| Output path | empty = `<project>/movies/<scene>_<camera>` |
-| Ornaments (HUD) | `showOrnaments` (HUD, camera name, …) |
-| Off-screen | `offScreen` (unaffected by overlapping windows) |
-| Viewport optimization | during export only: lock the view to the render frame (resolution gate) / polygons only / Use All Lights / SSAO + line AA + MSAA on — restored afterwards |
-| Keep PNGs | keep the intermediate PNG sequence — MP4 only |
+| Time Range | **Scene** on = the scene's playback range at capture time. Turn it off to type Start → End on the same row (while on, the fields show the scene range and are disabled) |
+| Output | empty = `<project>/movies/<scene>_<camera>` |
 | Open when done | open the exported movie (Maya's viewer for the native format) |
+| Keep PNGs | keep the intermediate PNG sequence — **shown for MP4 only** |
 
-The frame range is the time slider's Start / End. All values are saved automatically.
+**SETTINGS (rarely changed)**
+
+| Item | Meaning |
+|---|---|
+| Format | **Maya native / MP4** |
+| Resolution | **Render Settings** on = same as "Display size: From Render Settings" in Maya's playblast (exactly the resolution gate). While on, Width / Height show the render settings and are disabled; turning it off restores your own values |
+| FPS | **Scene** on = derived from the scene time unit; while on, the field shows the scene FPS and is disabled |
+| Quality / CRF / Preset | Quality = playblast quality (1–100). CRF = H.264 quality (lower = better, 18–23 recommended), Preset = x264 speed. CRF and Preset are **shown for MP4 only** |
+
+**Capture options**
+
+| Item | Meaning |
+|---|---|
+| Ornaments (HUD) | `showOrnaments` (HUD, camera name, …) |
+| Off screen | `offScreen` (unaffected by overlapping windows) |
+| Optimize viewport | during export only: lock the view to the render frame (resolution gate) / polygons only / Use All Lights / SSAO + line AA + MSAA on — restored afterwards |
+
+All values are saved automatically.
 
 > The Gate / Guides overlays never appear in playblasts.
 
 ### Multi-camera output (Multi)
 
 Turn **Multi** on to select several targets with **● PLAYBLAST** on each view's camera
-bar (up to 4); they are captured in sequence. With **Composite** on, the outputs are
+bar (up to 4); they are captured in sequence. With **Merge** on, the outputs are
 combined into a single `_Multi.mp4` that keeps each view's on-screen position and
-proportions; **Keep individual** also saves each camera's own movie. Existing outputs are
+proportions; **Keep each** also saves each camera's own movie. Existing outputs are
 never overwritten. For the full rules (naming, duplicate camera names, what is preserved
 on cancel/failure) see [MULTI_PLAYBLAST.md](MULTI_PLAYBLAST.md).
 

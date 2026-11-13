@@ -105,10 +105,12 @@ class MultiUI(unittest.TestCase):
         self.assertFalse(box.multiKeep.isHidden())
         self.assertTrue(self.owner.data['playblastKeepIndividuals'])
         box.multiCombine.setChecked(False)
-        self.assertTrue(box.multiKeep.isHidden())
+        self.assertFalse(box.multiKeep.isHidden())        # g4: 隠さず、合成 OFF の間は押せない
+        self.assertFalse(box.multiKeep.isEnabled())
         self.assertFalse(self.owner.data['playblastCombine'])
         box.multiCombine.setChecked(True)
         self.assertFalse(box.multiKeep.isHidden())
+        self.assertTrue(box.multiKeep.isEnabled())
         self.assertTrue(box.multiKeep.isChecked())
         box.multiKeep.setChecked(False)
         self.assertFalse(self.owner.data['playblastKeepIndividuals'])

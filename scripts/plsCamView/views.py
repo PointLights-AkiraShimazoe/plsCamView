@@ -33,6 +33,7 @@ except Exception:
 
 MAX_VIEWS = 4
 BAR_HEIGHT = 34
+NEW_ROLE = QtCore.Qt.UserRole + 101    # 「New」(新規カメラ作成)項目の目印(itemData)。実カメラ名とは無関係に見分ける
 
 LAYOUT_KEYS = ("horizontal", "vertical", "grid")
 
@@ -120,16 +121,16 @@ class CameraCombo(style.ComboBox):
     def __init__(self, parent=None):
         super(CameraCombo, self).__init__(parent)
         self.setObjectName("camCombo")
-        self._icon = style.make_camera_pixmap(18)
+        self._icon = style.make_camera_pixmap(style.px(18))
         self._hover = False
         self.setMinimumWidth(0)
-        self.setMaximumWidth(320)
+        self.setMaximumWidth(style.px(320))
         self.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Fixed)
-        self.setFixedHeight(26)
+        self.setFixedHeight(style.px(26))
         self.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
-        self._prefWidth = 180
+        self._prefWidth = style.px(180)
         f = self.font()
-        f.setPixelSize(15)
+        f.setPixelSize(style.px(15))
         f.setBold(True)
         self.setFont(f)
 
@@ -138,10 +139,10 @@ class CameraCombo(style.ComboBox):
         self.updateGeometry()
 
     def sizeHint(self):
-        return QtCore.QSize(self._prefWidth, 26)
+        return QtCore.QSize(self._prefWidth, style.px(26))
 
     def minimumSizeHint(self):
-        return QtCore.QSize(0, 26)
+        return QtCore.QSize(0, style.px(26))
 
     def enterEvent(self, e):
         self._hover = True
@@ -153,21 +154,128 @@ class CameraCombo(style.ComboBox):
         self.update()
         super(CameraCombo, self).leaveEvent(e)
 
+    # ---- 「New」(新規カメラ作成)項目 ---------------------------------------------
+    # 最後の 1 項目は実カメラではなく作成アクション。実カメラ名が "New" でも混同しないよう、
+    # 表示文字列ではなく itemData(NEW_ROLE) で見分ける。
+    last_real = u""      # 直近に選ばれていた実カメラ名(New を選んでも表示は変えない)
+
+    def is_new_index(self, i):
+        return 0 <= i < self.count() and bool(self.itemData(i, NEW_ROLE))
+
+    def real_indices(self):
+        return [i for i in range(self.count()) if not self.is_new_index(i)]
+
+    def display_text(self):
+        i = self.currentIndex()
+        if i < 0 or self.is_new_index(i):
+            return self.last_real
+        return self.itemText(i)
+
+    def step_real(self, delta, wrap=True):
+        u"""実カメラの項目だけを前後へ送る(New は飛ばす)。wrap=True は実カメラ数で折り返す。実カメラが 2 台未満なら何もしない。"""
+        reals = self.real_indices()
+        if len(reals) <= 1:
+            return False
+        cur = self.currentIndex()
+        if cur not in reals:
+            cur = next((i for i in reals if self.itemText(i) == self.last_real), reals[0])
+        pos = reals.index(cur) + int(delta)
+        pos = pos % len(reals) if wrap else max(0, min(len(reals) - 1, pos))
+        if reals[pos] != self.currentIndex():
+            self.setCurrentIndex(reals[pos])
+        return True
+
+    def _jump_real(self, last):
+        reals = self.real_indices()
+        if reals and reals[-1 if last else 0] != self.currentIndex():
+            self.setCurrentIndex(reals[-1 if last else 0])
+
+    # ---- 文字入力による先頭一致検索(実カメラの項目だけが対象。New は対象外) ----------------
+    # Qt 標準の検索(QComboBox / QAbstractItemView.keyboardSearch)は全項目を対象にするため New に当たりうる。同じ動作を実カメラだけで行う。
+    _search = u""
+    _search_clock = None
+
+    def _search_active(self):
+        c = self._search_clock
+        return bool(self._search) and c is not None and c.isValid() and c.elapsed() <= QtWidgets.QApplication.keyboardInputInterval()
+
+    def _type_ahead(self, e):
+        u"""印字できる文字(Ctrl / Alt / Meta なし)なら実カメラの先頭一致検索を行い True。候補なしでも True(何も変えない)。"""
+        text = e.text()
+        K = QtCore.Qt
+        if (e.modifiers() & (K.ControlModifier | K.AltModifier | K.MetaModifier)) or not text or not text.isprintable():
+            return False
+        if not self._search_active():
+            self._search = u""
+        if self._search_clock is None:
+            self._search_clock = QtCore.QElapsedTimer()
+        self._search_clock.restart()
+        self._search += text
+        s = self._search
+        same = len(s) > 1 and s.count(s[-1]) == len(s)     # 同じ文字の反復("aaa")は 1 文字として次の候補へ循環する
+        key = (s[-1] if same else s).lower()
+        reals = self.real_indices()
+        if not reals:
+            return True
+        cur = self.currentIndex()
+        if cur not in reals:
+            cur = next((i for i in reals if self.itemText(i) == self.last_real), reals[0])
+        start = reals.index(cur) + (1 if (len(s) == 1 or same) else 0)
+        for k in range(len(reals)):
+            i = reals[(start + k) % len(reals)]
+            if self.itemText(i).lower().startswith(key):
+                if i != self.currentIndex():
+                    self.setCurrentIndex(i)
+                break
+        return True
+
+    def wheelEvent(self, e):
+        # 標準のホイール切替は最後の項目(New)まで進んで作成を起動してしまう。実カメラだけを送る。
+        dy = e.angleDelta().y()
+        if dy:
+            self.step_real(-1 if dy > 0 else 1, wrap=False)
+        e.accept()
+
+    def keyPressEvent(self, e):
+        # 閉じた状態のキー操作(矢印 / 文字入力の先頭一致検索)は実カメラだけを選ぶ(New の作成は、ポップアップでの明示確定だけ)。
+        k, K = e.key(), QtCore.Qt
+        if (e.modifiers() & K.AltModifier) and k in (K.Key_Up, K.Key_Down):
+            return super(CameraCombo, self).keyPressEvent(e)          # ポップアップを開く
+        if k in (K.Key_Up, K.Key_Left):
+            self.step_real(-1, wrap=False)
+        elif k in (K.Key_Down, K.Key_Right):
+            self.step_real(1, wrap=False)
+        elif k in (K.Key_PageUp, K.Key_Home):
+            self._jump_real(False)
+        elif k in (K.Key_PageDown, K.Key_End):
+            self._jump_real(True)
+        elif k == K.Key_Space and not self._search_active():
+            self.showPopup()
+        elif k in (K.Key_Return, K.Key_Enter, K.Key_F4):
+            return super(CameraCombo, self).keyPressEvent(e)
+        elif self._type_ahead(e):
+            pass                                                      # 文字入力: 実カメラだけを対象にした先頭一致検索
+        else:
+            e.ignore()
+            return
+        e.accept()
+
     def paintEvent(self, event):
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
         r = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         p.setPen(QtGui.QPen(style._qc(186, 215, 247, 0.30 if self._hover else 0.18), 1.0))
         p.setBrush(style._qc(186, 214, 247, 0.16 if self._hover else 0.10))
-        p.drawRoundedRect(r, 13, 13)
+        k = style.px(100) / 100.0     # UI 倍率(0.9.1 r5。カスタム描画も同率)
+        p.drawRoundedRect(r, 13 * k, 13 * k)
 
         # カメラアイコン(左)
         ih = self._icon.height() / self._icon.devicePixelRatio()
-        p.drawPixmap(QtCore.QPointF(10, (self.height() - ih) / 2.0), self._icon)
+        p.drawPixmap(QtCore.QPointF(10 * k, (self.height() - ih) / 2.0), self._icon)
 
         # 名前(中央)
-        name = self.currentText().split("|")[-1] or tr(u"(カメラなし)")
-        text_rect = QtCore.QRectF(30, 0, self.width() - 30 - 26, self.height())
+        name = self.display_text().split("|")[-1] or tr(u"(カメラなし)")
+        text_rect = QtCore.QRectF(30 * k, 0, self.width() - 30 * k - 26 * k, self.height())
         p.setPen(QtGui.QColor(style.C["textHi"] if self.isEnabled() else style.C["textFaint"]))
         p.setFont(self.font())
         fm = QtGui.QFontMetrics(self.font())
@@ -175,8 +283,8 @@ class CameraCombo(style.ComboBox):
         p.drawText(text_rect, QtCore.Qt.AlignCenter, name)
 
         # ▾(右)
-        w, h = 9.0, 5.0
-        cx = self.width() - 15.0
+        w, h = 9.0 * k, 5.0 * k
+        cx = self.width() - 15.0 * k
         cy = self.height() / 2.0 + 0.5
         path = QtGui.QPainterPath()
         path.moveTo(cx - w / 2.0, cy - h / 2.0)
@@ -199,13 +307,14 @@ class CameraBar(QtWidgets.QWidget):
     """
 
     cameraChanged = QtCore.Signal(str)
+    newCameraRequested = QtCore.Signal()      # 「New」を利用者が選んだ(作成は受け手の ViewManager が行う)
     targetClicked = QtCore.Signal()
     popClicked = QtCore.Signal()
 
     def __init__(self, parent=None):
         super(CameraBar, self).__init__(parent)
         self.setObjectName("plsRoot")
-        self.setStyleSheet(style.stylesheet() + u"""
+        self.setStyleSheet(style.stylesheet() + style.scale_css(u"""
             QWidget#plsCamBar { background: %(bg)s; }
             QPushButton#targetBtn {
                 background: transparent; border: 1px solid %(border)s; border-radius: 12px;
@@ -231,13 +340,13 @@ class CameraBar(QtWidgets.QWidget):
             QToolButton#camStep:disabled { border-color: %(borderSoft)s; }
             QLabel#viewNo { color: %(textFaint)s; font-size: 12px; font-weight: 600;
                             background: transparent; border: none; }
-        """ % style.C)
+        """ % style.C))
         self._building = False
         self._popped = False
 
         lay = QtWidgets.QHBoxLayout(self)
-        lay.setContentsMargins(6, 3, 6, 3)
-        lay.setSpacing(6)
+        lay.setContentsMargins(style.px(6), style.px(3), style.px(6), style.px(3))
+        lay.setSpacing(style.px(6))
         lay.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
         self.setMinimumSize(0, 0)
         self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed)
@@ -247,20 +356,20 @@ class CameraBar(QtWidgets.QWidget):
         left.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         ll = QtWidgets.QHBoxLayout(left)
         ll.setContentsMargins(0, 0, 0, 0)
-        ll.setSpacing(6)
+        ll.setSpacing(style.px(6))
         ll.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
         self.targetBtn = QtWidgets.QPushButton(u"\u25cf  PLAYBLAST")
         self.targetBtn.setObjectName("targetBtn")
         self.targetBtn.setCheckable(True)
-        self.targetBtn.setFixedHeight(26)
+        self.targetBtn.setFixedHeight(style.px(26))
         self.targetBtn.setCursor(QtCore.Qt.PointingHandCursor)
         self.targetBtn.setToolTip(tr(u"Playblast 対象を追加・解除（複数選択）\n紫 = 選択中。最後の1つは解除しません。"))
         self.targetBtn.clicked.connect(self._on_target)
         f = self.targetBtn.font()
-        f.setPixelSize(12)
+        f.setPixelSize(style.px(12))
         f.setBold(True)
         self.targetBtn.setFont(f)
-        btn_w = QtGui.QFontMetrics(f).horizontalAdvance(self.targetBtn.text()) + 30
+        btn_w = QtGui.QFontMetrics(f).horizontalAdvance(self.targetBtn.text()) + style.px(30)
         self.targetBtn.setFixedWidth(btn_w)
         ll.addWidget(self.targetBtn)
         ll.addStretch(1)
@@ -270,9 +379,9 @@ class CameraBar(QtWidgets.QWidget):
         # ---- 中央: カメラ ----
         self.prevBtn = QtWidgets.QToolButton()
         self.prevBtn.setObjectName("camStep")
-        self.prevBtn.setFixedSize(26, 26)
+        self.prevBtn.setFixedSize(style.px(26), style.px(26))
         self.prevBtn.setIcon(QtGui.QIcon(style.make_arrow_pixmap("left")))
-        self.prevBtn.setIconSize(QtCore.QSize(16, 16))
+        self.prevBtn.setIconSize(QtCore.QSize(style.px(16), style.px(16)))
         self.prevBtn.setCursor(QtCore.Qt.PointingHandCursor)
         self.prevBtn.setToolTip(tr(u"前のカメラ"))
         self.prevBtn.clicked.connect(lambda: self.step_camera(-1))
@@ -281,13 +390,14 @@ class CameraBar(QtWidgets.QWidget):
         self.combo = CameraCombo()
         self.combo.setToolTip(tr(u"このビューのカメラを切り替える"))
         self.combo.currentIndexChanged.connect(self._on_camera)
+        self.combo.activated.connect(self._on_activated)       # 利用者の明示選択(New の作成はここだけ)
         lay.addWidget(self.combo)
 
         self.nextBtn = QtWidgets.QToolButton()
         self.nextBtn.setObjectName("camStep")
-        self.nextBtn.setFixedSize(26, 26)
+        self.nextBtn.setFixedSize(style.px(26), style.px(26))
         self.nextBtn.setIcon(QtGui.QIcon(style.make_arrow_pixmap("right")))
-        self.nextBtn.setIconSize(QtCore.QSize(16, 16))
+        self.nextBtn.setIconSize(QtCore.QSize(style.px(16), style.px(16)))
         self.nextBtn.setCursor(QtCore.Qt.PointingHandCursor)
         self.nextBtn.setToolTip(tr(u"次のカメラ"))
         self.nextBtn.clicked.connect(lambda: self.step_camera(1))
@@ -298,7 +408,7 @@ class CameraBar(QtWidgets.QWidget):
         right.setSizePolicy(QtWidgets.QSizePolicy.Preferred, QtWidgets.QSizePolicy.Preferred)
         rl = QtWidgets.QHBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(6)
+        rl.setSpacing(style.px(6))
         rl.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
         self.label = style.ElidedLabel(u"VIEW 1")
         self.label.setObjectName("viewNo")
@@ -306,15 +416,15 @@ class CameraBar(QtWidgets.QWidget):
         rl.addWidget(self.label, 1)
         self.popBtn = QtWidgets.QToolButton()
         self.popBtn.setObjectName("popBtn")
-        self.popBtn.setFixedSize(26, 26)
+        self.popBtn.setFixedSize(style.px(26), style.px(26))
         self.popBtn.setCursor(QtCore.Qt.PointingHandCursor)
         self.popBtn.clicked.connect(self.popClicked.emit)
         rl.addWidget(self.popBtn)
-        right.setMinimumWidth(26)
+        right.setMinimumWidth(style.px(26))
         lay.addWidget(right, 1)
         self.set_popped(False)
 
-        self.setFixedHeight(BAR_HEIGHT)
+        self.setFixedHeight(style.px(BAR_HEIGHT))
 
     # ------------------------------------------------------------------
     def _on_target(self, *_):
@@ -323,15 +433,39 @@ class CameraBar(QtWidgets.QWidget):
     def _on_camera(self, *_):
         if self._building:
             return
-        cam = self.combo.currentText()
+        i = self.combo.currentIndex()
+        if i < 0 or self.combo.is_new_index(i):
+            return                     # New は activated(利用者の明示選択)でだけ扱う。ここでは何もしない
+        cam = self.combo.itemText(i)
         if cam:
+            self.combo.last_real = cam
             self.cameraChanged.emit(cam)
 
-    def step_camera(self, delta):
-        n = self.combo.count()
-        if n <= 1:
+    def _on_activated(self, index):
+        u"""利用者が項目を選んだ。New のときだけ作成を要求する(表示は先に直前の実カメラへ戻す)。
+        再構築(set_cameras)・左右ボタン・プログラムからの選択では発火しない。"""
+        if self._building or not self.combo.is_new_index(index):
             return
-        self.combo.setCurrentIndex((self.combo.currentIndex() + delta) % n)
+        self._show_real_selection()
+        self.newCameraRequested.emit()
+
+    def _show_real_selection(self):
+        self._building = True
+        try:
+            for i in self.combo.real_indices():
+                if self.combo.itemText(i) == self.combo.last_real:
+                    self.combo.setCurrentIndex(i)
+                    break
+        finally:
+            self._building = False
+        self.combo.update()
+
+    def real_cameras(self):
+        return [self.combo.itemText(i) for i in self.combo.real_indices()]
+
+    def step_camera(self, delta):
+        u"""左右ボタン: 実カメラだけを巡回する(New は完全に無視。実カメラ数で折り返す)。"""
+        self.combo.step_real(delta, wrap=True)
 
     def set_label(self, text):
         self.label.setText(text.upper())
@@ -357,31 +491,46 @@ class CameraBar(QtWidgets.QWidget):
             self.popBtn.setToolTip(tr(u"別ウィンドウに出す(ポップアウト)"))
 
     def set_cameras(self, cams, current):
+        u"""cams は実カメラだけ。末尾に「New」(作成アクション)を 1 件足す(itemData で識別。選択状態にはしない)。"""
         self._building = True
         try:
             self.combo.clear()
             for c in cams:
                 self.combo.addItem(c)
+            self.combo.addItem(tr(u"\uff0b New"))
+            k = self.combo.count() - 1
+            self.combo.setItemData(k, True, NEW_ROLE)
+            self.combo.setItemData(k, tr(u"新規カメラを作成して、このビューへ切り替える"), QtCore.Qt.ToolTipRole)
+            reals = self.combo.real_indices()
+            cur_i = None
             if current:
-                i = self.combo.findText(current)
-                if i >= 0:
-                    self.combo.setCurrentIndex(i)
+                for i in reals:
+                    if self.combo.itemText(i) == current:
+                        cur_i = i
+                        break
+            if cur_i is None and reals:
+                cur_i = reals[0]
+            if cur_i is not None:
+                self.combo.setCurrentIndex(cur_i)
+                self.combo.last_real = self.combo.itemText(cur_i)
+            else:
+                self.combo.last_real = u""
         finally:
             self._building = False
         # 名前が省略されない幅を「希望幅」にする(最小幅としては要求しない)
         try:
             fm = QtGui.QFontMetrics(self.combo.font())
             widest = max([fm.horizontalAdvance(c.split("|")[-1]) for c in cams] or [60])
-            self.combo.setPreferredWidth(max(150, min(320, widest + 70)))
+            self.combo.setPreferredWidth(max(style.px(150), min(style.px(320), widest + style.px(70))))
         except Exception:
             pass
-        many = self.combo.count() > 1
+        many = len(cams) > 1                 # 矢印は実カメラ数が基準(New は数えない)
         self.prevBtn.setEnabled(many)
         self.nextBtn.setEnabled(many)
         self.combo.update()
 
     def current_camera(self):
-        return self.combo.currentText()
+        return self.combo.display_text()
 
 
 # ==========================================================================
@@ -404,6 +553,7 @@ class ViewSlot(object):
         self.bar = CameraBar()
         self.bar.set_label(u"View {}".format(index + 1))
         self.bar.cameraChanged.connect(self._on_camera_changed)
+        self.bar.newCameraRequested.connect(self._on_new_camera)
         self.bar.targetClicked.connect(lambda: self.owner.toggle_target(self.index))
         self.bar.popClicked.connect(self._on_pop_clicked)
         self._fitter = None
@@ -439,7 +589,7 @@ class ViewSlot(object):
         戻り値: slot(formLayout 名)
         """
         slot = cmds.formLayout(parent=parent)
-        bar_host = cmds.formLayout(parent=slot, height=BAR_HEIGHT)
+        bar_host = cmds.formLayout(parent=slot, height=style.px(BAR_HEIGHT))
         label = u"{} {}".format(self.owner.title, self.index + 1)
         viewport = vp.ModelViewport(slot, label=label,
                                     use_copy=self.owner.use_copy_panel,
@@ -522,8 +672,28 @@ class ViewSlot(object):
         cam = self.state.get("camera")
         if cam:
             self.viewport.set_camera(cam)
-        self.owner.apply_view_settings(self)
+        self.owner.apply_view_settings(self, seed_show=self._carry_show_state())
         self._schedule_fit()
+
+    def _carry_show_state(self):
+        u"""新しいパネルへ Show の実状態を引き継ぐ。
+        戻り値 True = 引継ぎ元が無い(保存済みの設定で 1 度だけ初期化する)。
+          - 呼出側が複製元を指定した場合(ポップアウト / ドック): Maya の複製が Show もそのまま写すので何もしない。
+          - それ以外(新規ビュー): 兄弟ビューの実状態を個別フラグで写す(古い保存値は使わない)。"""
+        vpt = self.viewport
+        if vpt is None or getattr(vpt, "state_source", None) == "explicit":
+            return False
+        sibling = self.owner.sibling_viewport(self)
+        if sibling is None:
+            return True
+        try:
+            failed = vpt.copy_show_state_from(sibling)
+            if failed:
+                cmds.warning(u"[plsCamView] " + tr(u"Show を反映・確認できなかったビュー: {}").format(
+                    u"View {} ({})".format(self.index + 1, u"/".join(failed))))
+        except Exception:
+            pass
+        return False
 
     def _schedule_fit(self):
         # Mayaがレイアウトを確定する0/120/400msの補正は保ち、重複予約だけをまとめる。
@@ -683,6 +853,9 @@ class ViewSlot(object):
         if self.viewport and self.viewport.set_camera(cam):
             self.state["camera"] = cam
             self.owner.on_camera_changed(self)
+
+    def _on_new_camera(self):
+        self.owner.create_new_camera(self)
 
     def set_cameras(self, cams):
         current = self.camera()
@@ -969,9 +1142,59 @@ class ViewManager(object):
         self.owner.apply_view_settings(view)
         self.owner.on_views_changed()
 
+    _creating_camera = False
+
+    def create_new_camera(self, slot):
+        u"""カメラバーの「New」を利用者が選んだときだけ呼ばれる(リスト更新・再構築・起動・左右ボタンからは呼ばれない)。
+        Maya 標準の新規カメラを 1 台作り、**操作したビュー(slot)だけ**をそのカメラへ切り替える。
+        全ビューの候補は更新するが、他のビューの使用カメラは ViewSlot.set_cameras が維持する。Show は書かない。
+        失敗(作成不能 / 切替不能)は直前のカメラと選択表示へ戻す。既存ノードは消さない。作成中の再要求は無視する。
+        戻り値: 作成して slot を切り替えたら True。"""
+        if self._creating_camera or self.closing:
+            return False
+        self._creating_camera = True
+        prev = slot.camera()
+        ok = False
+        try:
+            res = vp.create_new_camera()
+            new = res.node
+            if new and not res.ok:
+                self.refresh_cameras()      # 作成済みのカメラは残し、候補にだけ出す(切替はしない。警告は create_new_camera が出す)
+            elif new:
+                switched = bool(slot.viewport and slot.viewport.set_camera(new))
+                if switched:
+                    slot.state["camera"] = new
+                self.refresh_cameras()
+                if switched:
+                    self.on_camera_changed(slot)
+                    ok = True
+                else:
+                    try:
+                        cmds.warning(u"[plsCamView] " + tr(u"新規カメラ {} を作成しましたが、このビューへ切り替えられませんでした").format(new))
+                    except Exception:
+                        pass
+        finally:
+            self._creating_camera = False
+            if not ok:
+                try:
+                    slot.bar.set_cameras(slot.bar.real_cameras(), prev)     # 直前のカメラと選択表示へ戻す
+                except Exception:
+                    pass
+        return ok
+
     # ------------------------------------------------------------------
     #  一括適用
     # ------------------------------------------------------------------
+    def sibling_viewport(self, slot):
+        u"""slot 以外で、有効な ModelViewport を持つ最初のビュー(Show の引継ぎ元)。無ければ None。"""
+        for v in self.views:
+            if v is slot:
+                continue
+            vpt = v.viewport
+            if vpt is not None and isinstance(vpt, vp.ModelViewport) and vpt.is_valid():
+                return vpt
+        return None
+
     def each_viewport(self):
         for v in self.views:
             if v.viewport is not None and isinstance(v.viewport, vp.ModelViewport):
@@ -980,8 +1203,8 @@ class ViewManager(object):
     def show_main_window(self):
         self.owner.show_main_window()
 
-    def apply_view_settings(self, view):
-        self.owner.apply_view_settings(view)
+    def apply_view_settings(self, view, seed_show=False):
+        self.owner.apply_view_settings(view, seed_show=seed_show)
 
     # ------------------------------------------------------------------
     def collect(self):

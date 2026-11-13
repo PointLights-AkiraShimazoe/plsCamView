@@ -14,15 +14,14 @@ Playblast 対象の固定、MP4 書き出しまでを 1 つのウィンドウで
 > switch that pins every playblast — from Maya's own menu or from your own Python
 > tools — to this view. MP4 export via ffmpeg. All state is persisted.
 
-**バージョン 0.9.0（初回公開版）／ MIT License**
+**バージョン 0.9.1 ／ MIT License**
 
 📖 **全機能ガイド**: [日本語](docs/USER_GUIDE_ja.md) ／ **Full user guide**: [English](docs/USER_GUIDE_en.md)
-（2026-10-24: ガイド各節に UI 画像を追加。画像は公開版 v0.9.0 ソースの offscreen Qt 描画です）
 
 <p align="center">
-  <img src="docs/toolbox.png" width="360" alt="toolbox">
-  <br><sub>※参考画像（開発中の画面）。Gate / Guides / Language など現行 0.9.0 の全機能と配置は
-  <a href="docs/USER_GUIDE_ja.md">ガイド</a>を参照してください。</sub>
+  <img src="docs/images/toolbox_full.png" width="300" alt="toolbox">
+  <br><sub>現行 UI（実装コードを offscreen Qt で描画。実 Maya 画面ではありません）。
+  各機能の画像つき説明は<a href="docs/USER_GUIDE_ja.md">ガイド</a>へ。</sub>
 </p>
 
 ---
@@ -42,6 +41,8 @@ Playblast 対象の固定、MP4 書き出しまでを 1 つのウィンドウで
 - **MP4 書き出し** — ツール内の Playblast を ffmpeg で直接 MP4(H.264) に。
   解像度 / FPS / CRF / プリセット / 品質 / ビューポート最適化などを指定可能
 - **複数カメラ出力（Multi）** — 複数ビューを選んで順次撮影、位置・比率を保った 1 本への合成も可能
+- **UI 倍率** — 最上部の ⚙ から 75〜125% を保存可能（既定 85% のコンパクト表示。
+  文字・ボタン・余白・クリック範囲が同率で変わり、OS の表示スケールには触れません）
 - **UI 言語** — 日本語 / English / システム追従
 - **状態を完全復元** — 次に開いたときは前回と同じ状態
 
@@ -60,7 +61,9 @@ Playblast 対象の固定、MP4 書き出しまでを 1 つのウィンドウで
 
 1. リリースの zip をダウンロードして展開します。
 2. `plsCamView_install.py` を **Maya のビューポートへドラッグ & ドロップ**します。
-3. 開いたウィンドウで **［Install］** を押します。
+3. 開いたウィンドウで **［インストール］** を押します。
+
+<p align="center"><img src="docs/images/installer.png" width="420" alt="installer"></p>
 
 `<Maya userAppDir>/modules/plsCamView/` に本体が、`plsCamView.mod` にモジュール定義が
 作成され、その場で使えるようになります（Maya の再起動は不要）。
@@ -113,10 +116,10 @@ plsCamView.playblast_mp4()    # ツールボックスの設定で MP4 書き出�
 | **Views** | ビュー数（1〜4）と配置（横並び / 縦並び / グリッド）、標準カメラの表示、カメラ一覧の再取得 |
 | **Show** | All / None / Polygon のプリセット ＋ Joint / NurbsCurve スイッチ（全ビュー共通） |
 | **Shadow** | `Lighting > Shadows` の ON/OFF（このツールのビューだけ） |
-| **Effects** | SSAO / Anti-aliasing / Line AA（Viewport 2.0 の共通設定。一括 ON/OFF つき） |
+| **Effects** | SSAO / Anti-aliasing / Line AA（Viewport 2.0 の共通設定。一括 ON/OFF・調整プリセットつき） |
 | **Gate** | レゾリューションゲート: ゲート外マスク（色・不透明度）、枠線、内側ゲート×3（%・色・線/塗り・破線） |
 | **Guides** | 構図ガイド: 三分割 / 比率グリッド（黄金比 φ・白銀比 √2） / アーマチュア / 中心。合わせ先（ゲート / 内側ゲート / ビュー全体）と色・太さ・不透明度 |
-| **Playblast** | Force Playblast Target、Multi（複数カメラ出力・合成）、出力形式（Maya 標準 / MP4）と書き出し設定 |
+| **Playblast** | Force Playblast Target、Multi（複数カメラ出力・合成）、Time Range、出力先。めったに変えない設定（形式・解像度・FPS・品質）は畳める SETTINGS、HUD・オフスクリーン・最適化は撮影オプション |
 
 ### Gate / Guides について
 
@@ -185,6 +188,7 @@ JSON を直接編集して調整できる項目：
 | `useCopyPanel` | `true` | ビューを既存パネルの複製として作る。`false` で新規パネル作成 |
 | `toolboxPercent` | `26` | ツールボックス側のペイン比率（%） |
 | `language` | `"system"` | UI 言語（`"system"` / `"ja"` / `"en"`） |
+| `uiScale` | `85` | UI 倍率（%）。75 / 85 / 100 / 115 / 125。最上部の ⚙ からも変更可 |
 
 ---
 

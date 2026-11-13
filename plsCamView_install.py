@@ -138,8 +138,11 @@ def install(create_shelf_button=True):
 
     # --- 再起動なしで使えるようにする -------------------------------------
     scripts_path = os.path.join(dest_dir, "scripts").replace("\\", "/")
-    if scripts_path not in sys.path:
-        sys.path.insert(0, scripts_path)
+    # 既に入っていても先頭へ移す(展開元などが前にあると、下の purge 後の import が
+    # 導入先でない方を拾う)。import plsCamView の __file__ を導入先に保証する(0.9.1 レビュー対応)。
+    _norm = os.path.normpath(scripts_path).lower()
+    sys.path[:] = [p for p in sys.path if os.path.normpath(p or ".").lower() != _norm]
+    sys.path.insert(0, scripts_path)
     for name in [m for m in list(sys.modules) if m == TOOL_NAME or
                  m.startswith(TOOL_NAME + ".")]:
         del sys.modules[name]
@@ -176,8 +179,176 @@ def uninstall():
 
 
 # --------------------------------------------------------------------------
-#  UI
+#  UI (0.9.1: CamView 本体と同じ見た目の Qt ダイアログ。qt/style は同梱パッケージから
+#  読むので未インストールの単独 D&D でも使える。使えない環境は従来の cmds UI へ戻る)
 # --------------------------------------------------------------------------
+_BUNDLE_PKG = "plsCamViewInstallerBundle"
+
+
+def _qt_modules():
+    u"""installer の隣(scripts/plsCamView)の qt / style を、通常名とは別名のパッケージ
+    (plsCamViewInstallerBundle)としてファイルパスから直接読み込む(0.9.1 レビュー対応)。
+    - 旧版の plsCamView が既にロードされていても、同梱版のスタイルを確実に使う
+    - sys.path を変更しない(インストール後の import 解決を展開元へ向けない)
+    - ロード済みの plsCamView / 生きている UI には触れない(purge / reload しない)
+    失敗したら None(従来の cmds UI へ)。"""
+    try:
+        import importlib.util
+        import types as _types
+        pkg_dir = os.path.join(_source_dir(), "scripts", TOOL_NAME)
+        if not os.path.isdir(pkg_dir):
+            return None
+        pkg = sys.modules.get(_BUNDLE_PKG)
+        if pkg is None or getattr(pkg, "__path__", [None])[0] != pkg_dir:
+            pkg = _types.ModuleType(_BUNDLE_PKG)
+            pkg.__path__ = [pkg_dir]
+            sys.modules[_BUNDLE_PKG] = pkg
+            sys.modules.pop(_BUNDLE_PKG + ".qt", None)
+            sys.modules.pop(_BUNDLE_PKG + ".style", None)
+
+        def _load(name):
+            full = _BUNDLE_PKG + "." + name
+            if full in sys.modules:
+                return sys.modules[full]
+            spec = importlib.util.spec_from_file_location(
+                full, os.path.join(pkg_dir, name + ".py"))
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[full] = mod
+            try:
+                spec.loader.exec_module(mod)
+            except Exception:
+                sys.modules.pop(full, None)
+                raise
+            return mod
+
+        qt = _load("qt")          # style の from .qt import より先に読む
+        style = _load("style")
+        return qt, style
+    except Exception:
+        return None
+
+
+def _maya_main_window(qt):
+    try:
+        import maya.OpenMayaUI as omui
+        ptr = omui.MQtUtil.mainWindow()
+        if ptr:
+            return qt.wrapInstance(int(ptr), qt.QtWidgets.QWidget)
+    except Exception:
+        pass
+    return None
+
+
+_qt_dialog = None
+
+
+def build_installer_dialog(qt, style, parent=None):
+    u"""Qt 版インストーラの見た目を組み立てて返す(テスト・offscreen 画像用に分離)。
+    install / rollback / ffmpeg 引き継ぎの処理は install() のまま変更しない。"""
+    QtCore, QtWidgets = qt.QtCore, qt.QtWidgets
+    src_dir = _source_dir()
+    version = _read_version(src_dir)
+    dest_dir, _mod = _install_paths()
+
+    dlg = QtWidgets.QDialog(parent)
+    dlg.setWindowTitle(u"plsCamView インストーラ")
+    dlg.setObjectName("plsRoot")
+    # 保存済みの UI 倍率があれば installer にも適用(無ければ既定。読取のみ)
+    try:
+        from maya import cmds as _cmds
+        import io as _io
+        import json as _json
+        _pref = _cmds.internalVar(userPrefDir=True)
+        with _io.open(os.path.join(_pref, "plsCamView", "settings.json"), "r", encoding="utf-8") as _f:
+            style.set_ui_scale((_json.load(_f) or {}).get("uiScale", style.UI_SCALE_DEFAULT))
+    except Exception:
+        try:
+            style.set_ui_scale(style.UI_SCALE_DEFAULT)
+        except Exception:
+            pass
+    dlg.setStyleSheet(style.stylesheet())
+    try:
+        dlg.setWindowFlag(QtCore.Qt.WindowContextHelpButtonHint, False)
+    except Exception:
+        pass
+    dlg.setFixedWidth(style.px(420))
+    outer = QtWidgets.QVBoxLayout(dlg)
+    outer.setContentsMargins(12, 12, 12, 12)
+    outer.setSpacing(10)
+
+    card = style.Card(u"plsCamView  v{}".format(version))
+    card.setToolTip(u"Maya のメインウィンドウから分離した、ツールボックス付きカメラビュー。\n"
+                    u"インストールはこの Maya のユーザー環境だけに入ります(再起動不要)。")
+
+    dest_lab = QtWidgets.QLabel(u"導入先")
+    dest_lab.setObjectName("fieldLabel")
+    dest_path = QtWidgets.QLabel(dest_dir)
+    dest_path.setObjectName("note")
+    dest_path.setWordWrap(True)
+    dest_path.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+    dest_path.setToolTip(u"モジュールとして作成: {0}\nモジュール定義: {0}.mod\n"
+                         u"アンインストールはこの 2 つを削除するだけです。".format(dest_dir))
+    card.body.addWidget(dest_lab)
+    card.body.addWidget(dest_path)
+
+    shelf = style.ToggleSwitch(u"シェルフボタン")
+    shelf.setChecked(True)
+    shelf.setToolTip(u"現在のシェルフに起動ボタンを追加します。\n"
+                     u"同じ起動コマンドのボタンが既にあれば更新します。")
+    card.body.addWidget(shelf)
+    outer.addWidget(card)
+
+    row = QtWidgets.QHBoxLayout()
+    row.setSpacing(8)
+    row.addStretch(1)
+    ok = QtWidgets.QPushButton(u"インストール")
+    ok.setObjectName("primary")
+    ok.setDefault(True)
+    ok.setToolTip(u"更新のときは新版のコピー完了後に旧版を退避し、失敗したら旧版へ自動で戻します。\n"
+                  u"配布物に ffmpeg が無い場合、既存の bin/ffmpeg.exe は引き継がれます。")
+    close = QtWidgets.QPushButton(u"閉じる")
+    close.setToolTip(u"何もせずに閉じます。")
+    row.addWidget(ok)
+    row.addWidget(close)
+    outer.addLayout(row)
+
+    dlg._shelf = shelf
+    dlg._ok = ok
+    dlg._close = close
+    dlg._dest = dest_path
+    return dlg
+
+
+def _show_installer_qt(qt, style):
+    QtWidgets = qt.QtWidgets
+    global _qt_dialog
+    try:
+        if _qt_dialog is not None:
+            _qt_dialog.close()
+            _qt_dialog.deleteLater()
+    except Exception:
+        pass
+    dlg = build_installer_dialog(qt, style, _maya_main_window(qt))
+    _qt_dialog = dlg
+
+    def _on_install():
+        dest = install(create_shelf_button=dlg._shelf.isChecked())
+        if not dest:
+            return
+        dlg.close()
+        try:
+            import importlib
+            importlib.import_module(TOOL_NAME).show()
+        except Exception as e:
+            cmds.warning(u"[{}] 起動に失敗しました: {}".format(TOOL_NAME, e))
+
+    dlg._ok.clicked.connect(_on_install)
+    dlg._close.clicked.connect(dlg.close)
+    dlg.show()
+    dlg.raise_()
+    return dlg
+
+
 def _do_install(*_):
     dest = install(create_shelf_button=cmds.checkBox(
         "plsCamViewShelfChk", q=True, value=True))
@@ -198,6 +369,21 @@ def _do_cancel(*_):
 
 
 def show_installer():
+    u"""インストーラ UI。CamView 本体のスタイル(Qt)を優先し、使えなければ cmds UI(従来)。"""
+    mods = _qt_modules()
+    if mods is not None:
+        try:
+            return _show_installer_qt(*mods)
+        except Exception as e:
+            try:
+                cmds.warning(u"[{}] Qt インストーラを開けませんでした({})。従来 UI で開きます。".format(
+                    TOOL_NAME, e))
+            except Exception:
+                pass
+    return _show_installer_cmds()
+
+
+def _show_installer_cmds():
     src_dir = _source_dir()
     version = _read_version(src_dir)
     dest_dir, _mod = _install_paths()

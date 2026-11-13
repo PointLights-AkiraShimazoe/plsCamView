@@ -86,7 +86,9 @@ class Batch(unittest.TestCase):
                         patch.object(mb, 'frame_range', return_value=(1, 3)),
                         patch.object(mb, 'scene_fps', return_value=24),
                         patch.object(hook, '_raw_get_panel', return_value='元のパネル'),
-                        patch.object(m, '_encode', side_effect=encode)]
+                        patch.object(m, '_encode', side_effect=encode),
+                        # 合成動画の寸法を確認できなければ公開しない仕様。ここでは確認結果=期待どおりを返す
+                        patch.object(mb, 'probe_video_size', side_effect=lambda ff, path, **k: (320, 180))]
         for p in self.patches:
             p.start()
     def test_dotted_stem(self):

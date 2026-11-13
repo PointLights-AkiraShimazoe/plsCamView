@@ -70,6 +70,37 @@ MONO_FAMILY = (
 )
 
 # 角丸(用途で厳格に使い分ける)
+# --------------------------------------------------------------------------
+#  UI 倍率(0.9.x)。全ての px 寸法(スタイルシート・固定寸法・カスタム描画)をここで一括スケール。
+#  OS / Qt のスケール係数には触れない(その上に掛かる相対倍率。二重 DPI 適用を起こさない)。
+_UI_SCALE = 1.0
+UI_SCALE_CHOICES = (75, 85, 100, 115, 125)
+UI_SCALE_DEFAULT = 85            # コンパクト新既定(本文約14px。旧来の見た目は 115〜125%)
+
+
+def set_ui_scale(percent):
+    u"""UI 倍率(%)を設定する。スタイルシートのキャッシュも捨てる。戻り値は丸めた%。"""
+    global _UI_SCALE, _STYLESHEET_CACHE
+    try:
+        p = int(round(float(percent)))
+    except Exception:
+        p = UI_SCALE_DEFAULT
+    p = max(50, min(200, p))
+    _UI_SCALE = p / 100.0
+    _STYLESHEET_CACHE = None
+    return p
+
+
+def ui_scale_percent():
+    return int(round(_UI_SCALE * 100))
+
+
+def px(v):
+    u"""倍率適用済み px(1 未満にしない)。固定寸法・カスタム描画はこれを通す。"""
+    s = int(round(v * _UI_SCALE))
+    return s if s >= 1 or v <= 0 else 1
+
+
 R_PILL = 17       # ボタン(pill)。Qt は極端に大きい radius を扱えないため
                   # 実高さの半分弱を指定して pill 形状にする(高さ 36〜38px 想定)。
 R_CARD = 16       # カード / モーダル
@@ -89,11 +120,25 @@ _STYLESHEET_CACHE = None
 
 
 def stylesheet():
-    u"""QSS 文字列(1 回だけ組み立ててキャッシュ。ToolBox と各 CameraBar が使う)。"""
+    u"""QSS 文字列(倍率ごとに組み立ててキャッシュ。ToolBox と各 CameraBar が使う)。"""
     global _STYLESHEET_CACHE
     if _STYLESHEET_CACHE is None:
-        _STYLESHEET_CACHE = _build_stylesheet()
+        css = _build_stylesheet()
+        if abs(_UI_SCALE - 1.0) > 1e-6:
+            css = _RE_PX.sub(lambda m: u"{}px".format(px(float(m.group(1)))), css)
+        _STYLESHEET_CACHE = css
     return _STYLESHEET_CACHE
+
+
+_RE_PX = __import__("re").compile(r"(\d+(?:\.\d+)?)px")
+
+
+def scale_css(css):
+    u"""個別ウィジェットに足す追加 QSS(CameraBar・色ボタン等)にも UI 倍率を掛ける(0.9.1 r5)。
+    stylesheet() と同じ規則で全 px 値を置換する。倍率 100% ならそのまま返す。"""
+    if abs(_UI_SCALE - 1.0) <= 1e-6:
+        return css
+    return _RE_PX.sub(lambda m: u"{}px".format(px(float(m.group(1)))), css)
 
 
 def _build_stylesheet():
@@ -204,6 +249,13 @@ QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus {{
 QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{
     color: {textFaint};
     border-color: {borderSoft};
+}}
+/* 数値欄(全て NoButtons)。Qt 6.12 は QSS の box model(border / padding)+ NoButtons で入力部(lineEdit)を幅 1px に潰し、
+   数字が描画されない。上下ボタンのサブコントロールを幅 0・origin border にすると、Qt 6.8 / 6.12 とも入力部が数字用の幅になる。 */
+QSpinBox::up-button, QSpinBox::down-button, QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
+    width: 0px;
+    border: none;
+    subcontrol-origin: border;
 }}
 QComboBox::drop-down {{
     border: none;
@@ -354,6 +406,40 @@ QToolTip {{
     border: 1px solid {border};
     border-radius: {rInput}px;
     padding: 5px 8px;
+}}
+/* ⚙ UI 倍率メニュー等のポップアップ(0.9.1 r7。Maya のパレットに依存せず同じ見た目・倍率) */
+QMenu {{
+    background: #0b0d18;
+    color: {text};
+    border: 1px solid {border};
+    border-radius: {rInput}px;
+    padding: 4px;
+}}
+QMenu::item {{
+    background: transparent;
+    padding: 5px 16px 5px 24px;
+    border-radius: 4px;
+}}
+QMenu::item:selected {{
+    background: {frost12};
+    color: {textHi};
+}}
+QMenu::item:disabled {{
+    color: {textFaint};
+}}
+QMenu::indicator {{
+    width: 8px;
+    height: 8px;
+    left: 8px;
+}}
+QMenu::indicator:checked {{
+    background: {accent};
+    border-radius: 4px;
+}}
+QMenu::separator {{
+    height: 1px;
+    background: {border};
+    margin: 4px 6px;
 }}
 """.format(font=FONT_FAMILY, mono=MONO_FAMILY,
            rPill=R_PILL, rCard=R_CARD, rInput=R_INPUT, **C)
@@ -584,9 +670,15 @@ class ToggleSwitch(QtWidgets.QCheckBox):
     TRACK_H = 22
     PAD = 2
 
-    def __init__(self, text=u"", parent=None):
+    def __init__(self, text=u"", parent=None, compact=False):
         super(ToggleSwitch, self).__init__(text, parent)
+        # UI 倍率(クリック範囲・描画とも同率)。compact: 同じ行へ複数並べるときの小さいトラック
+        self.TRACK_W = px(26 if compact else ToggleSwitch.TRACK_W)
+        self.TRACK_H = px(16 if compact else ToggleSwitch.TRACK_H)
+        self.PAD = max(1, px(ToggleSwitch.PAD))
+        self._gap = px(4 if compact else 10)       # トラックと文字の間
         self._knob = 0.0
+        self._mixed = False           # 複数ビューで状態が異なる(中間表示)
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self.setMinimumHeight(self.TRACK_H + 2)
 
@@ -606,6 +698,7 @@ class ToggleSwitch(QtWidgets.QCheckBox):
     knobPos = QtCore.Property(float, _get_knob, _set_knob)
 
     def _animate(self, on):
+        self._mixed = False           # 切り替わったら mixed は解除
         try:
             self._anim.stop()
             self._anim.setStartValue(self._knob)
@@ -617,8 +710,24 @@ class ToggleSwitch(QtWidgets.QCheckBox):
 
     def showEvent(self, e):
         # コードから setChecked された分を確実に反映
-        self._knob = 1.0 if self.isChecked() else 0.0
+        self._knob = 0.5 if self._mixed else (1.0 if self.isChecked() else 0.0)
         super(ToggleSwitch, self).showEvent(e)
+
+    def setMixed(self, on):
+        u"""複数ビューで状態が異なることを中間表示にする(isChecked は False のまま。押すと ON になる)。"""
+        self._mixed = bool(on)
+        if self._mixed:
+            self._anim.stop()
+            self._set_knob(0.5)
+        else:
+            self._set_knob(1.0 if self.isChecked() else 0.0)
+
+    def isMixed(self):
+        return self._mixed
+
+    def nextCheckState(self):
+        self._mixed = False
+        super(ToggleSwitch, self).nextCheckState()
 
     # -- サイズ / 当たり判定 --------------------------------------------
     def sizeHint(self):
@@ -627,7 +736,7 @@ class ToggleSwitch(QtWidgets.QCheckBox):
             tw = fm.horizontalAdvance(self.text())
         except AttributeError:
             tw = fm.width(self.text())
-        w = self.TRACK_W + (10 + tw if self.text() else 0)
+        w = self.TRACK_W + (self._gap + tw if self.text() else 0)
         return QtCore.QSize(w, max(self.TRACK_H + 2, fm.height() + 4))
 
     def hitButton(self, pos):
@@ -649,6 +758,9 @@ class ToggleSwitch(QtWidgets.QCheckBox):
         else:
             col = _qc(199, 211, 234, 0.10 if enabled else 0.05)
             knob_col = _qc(157, 167, 186, 1.0 if enabled else 0.45)
+        if self._mixed:
+            col = _qc(186, 214, 247, 0.20 if enabled else 0.09)
+            knob_col = _qc(214, 226, 245, 1.0 if enabled else 0.45)
         p.setPen(QtGui.QPen(_qc(186, 215, 247, 0.12), 1.0))
         p.setBrush(col)
         p.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5),
@@ -665,8 +777,8 @@ class ToggleSwitch(QtWidgets.QCheckBox):
         # テキスト
         if self.text():
             p.setPen(QtGui.QColor(C["text"] if enabled else C["textFaint"]))
-            r = QtCore.QRectF(self.TRACK_W + 10, 0,
-                              self.width() - self.TRACK_W - 10, self.height())
+            r = QtCore.QRectF(self.TRACK_W + self._gap, 0,
+                              self.width() - self.TRACK_W - self._gap, self.height())
             p.drawText(r, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, self.text())
         p.end()
 
@@ -674,19 +786,136 @@ class ToggleSwitch(QtWidgets.QCheckBox):
 # ==========================================================================
 #  カード / セグメンテッドコントロール
 # ==========================================================================
-class ComboBox(QtWidgets.QComboBox):
+# ==========================================================================
+#  数値欄(FitSpinBox / FitDoubleSpinBox)  FX-INPUT-FIT-20261031-01
+# ==========================================================================
+#  数値欄は固定 px 幅だと、倍率・フォント・桁(単位つき)で「最悪値の表示」が収まらず末尾が欠ける
+#  (例: Inner gates の "100.0 %" は幅 72px×85% の文字領域 45px に対し 53px 必要)。
+#  ここでは最悪値の表示幅を実測し、**現行の幅(floor)で足りる欄は現行のまま**、足りない欄だけ広げる。
+#  最悪値 = 最小値 / 最大値の表示(接頭辞・接尾辞つき)の全ての数字を、そのフォントで最も幅の広い数字に置き換えたもの
+#  (負号は最小値が負のときだけ含む)。必要幅 = 文字幅 + 左右(border + padding) + 余白 2px(キャレット用)。
+#  QSS の border は 1px、padding は既定 8px(PLAYBLAST の数値欄は 4px)。
+_DIGITS = u"0123456789"
+
+
+class _FitMixin(object):
+    _fit_floor = 0          # 現行の幅(px。呼び出し側が style.px() を通した値)
+    _fit_hpad = 8           # 左右 padding(QSS の値。倍率前)
+    _fit_slack = 2
+
+    def setFit(self, floor_px, hpad=8, fixed=True):
+        u"""floor_px: 現行の幅。fixed=True は横を固定(sizeHint 幅)、False は伸びてよい(最小幅だけ保証)。"""
+        self._fit_floor = int(floor_px)
+        self._fit_hpad = hpad
+        pol = self.sizePolicy()
+        pol.setHorizontalPolicy(QtWidgets.QSizePolicy.Fixed if fixed else QtWidgets.QSizePolicy.Expanding)
+        self.setSizePolicy(pol)
+        self.updateGeometry()
+        return self
+
+    def worstText(self):
+        u"""最悪値の表示(桁数が最大の最小値/最大値の文字列。数字は最も幅の広い数字)。"""
+        fm = self.fontMetrics()
+        wid = max(_DIGITS, key=lambda d: fm.horizontalAdvance(d))
+        best = u""
+        for v in (self.minimum(), self.maximum()):
+            t = u"".join(wid if c in _DIGITS else c for c in self.textFromValue(v))
+            if fm.horizontalAdvance(t) >= fm.horizontalAdvance(best):
+                best = t
+        return self.prefix() + best + self.suffix()
+
+    def fitWidth(self):
+        u"""必要な最小幅(px)。"""
+        self.ensurePolished()
+        text_w = self.fontMetrics().horizontalAdvance(self.worstText())
+        return text_w + 2 * (px(1) + px(self._fit_hpad)) + px(self._fit_slack)
+
+    def targetWidth(self):
+        return max(self._fit_floor, self.fitWidth())
+
+    def sizeHint(self):
+        s = super(_FitMixin, self).sizeHint()
+        if self._fit_floor:
+            s.setWidth(self.targetWidth())
+        return s
+
+    def minimumSizeHint(self):
+        s = super(_FitMixin, self).minimumSizeHint()
+        if self._fit_floor:
+            s.setWidth(self.targetWidth())
+        return s
+
+    def event(self, e):
+        if e.type() in (QtCore.QEvent.Polish, QtCore.QEvent.StyleChange, QtCore.QEvent.FontChange,
+                        QtCore.QEvent.LocaleChange):
+            r = super(_FitMixin, self).event(e)
+            self.updateGeometry()                      # 最終のフォント/QSS が決まったら寸法を取り直す
+            return r
+        return super(_FitMixin, self).event(e)
+
+
+class _WheelGuard(object):
+    u"""ホイールで値を変えるのは、クリックして選んだ(フォーカスがある)ときだけ(FX-WHEEL-GUARD)。
+    選んでいないときのホイールは無視して親(パネルのスクロール)へ渡す。パネルを送るつもりで
+    数値欄・スライダ・プルダウンの上を通っても、値が変わらないようにする。"""
+
+    _ARM_REASONS = (QtCore.Qt.MouseFocusReason, QtCore.Qt.TabFocusReason, QtCore.Qt.BacktabFocusReason)
+
+    def _wheel_guard_init(self):
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)     # 既定の WheelFocus はホイールでフォーカスを取って値が変わる
+        self._wheel_armed = False
+
+    def focusInEvent(self, e):
+        # クリック/Tab で選んだときだけ有効にする。ウィンドウを開いた・切り替えたときに Qt が自動で
+        # 最初の部品へフォーカスを置く場合(ActiveWindow/Other)は有効にしない。
+        self._wheel_armed = e.reason() in self._ARM_REASONS
+        super(_WheelGuard, self).focusInEvent(e)
+
+    def focusOutEvent(self, e):
+        self._wheel_armed = False
+        super(_WheelGuard, self).focusOutEvent(e)
+
+    def wheelEvent(self, e):
+        if not (self.hasFocus() and getattr(self, "_wheel_armed", False)):
+            e.ignore()                                  # 親(QScrollArea)へ伝わり、パネルがスクロールする
+            return
+        super(_WheelGuard, self).wheelEvent(e)
+
+
+class FitSpinBox(_WheelGuard, _FitMixin, QtWidgets.QSpinBox):
+    def __init__(self, *args, **kwargs):
+        super(FitSpinBox, self).__init__(*args, **kwargs)
+        self._wheel_guard_init()
+
+
+class FitDoubleSpinBox(_WheelGuard, _FitMixin, QtWidgets.QDoubleSpinBox):
+    def __init__(self, *args, **kwargs):
+        super(FitDoubleSpinBox, self).__init__(*args, **kwargs)
+        self._wheel_guard_init()
+
+
+class Slider(_WheelGuard, QtWidgets.QSlider):
+    u"""ホイールはフォーカスがあるときだけ効く QSlider(SliderRow 用)。"""
+
+    def __init__(self, *args, **kwargs):
+        super(Slider, self).__init__(*args, **kwargs)
+        self._wheel_guard_init()
+
+
+class ComboBox(_WheelGuard, QtWidgets.QComboBox):
     u"""ドロップダウン矢印を自前で描く QComboBox(QSS だけだと矢印が消えるため)。"""
 
     def __init__(self, parent=None):
         super(ComboBox, self).__init__(parent)
         self.setCursor(QtCore.Qt.PointingHandCursor)
+        self._wheel_guard_init()
 
     def paintEvent(self, event):
         super(ComboBox, self).paintEvent(event)
         p = QtGui.QPainter(self)
         p.setRenderHint(QtGui.QPainter.Antialiasing, True)
 
-        w, h = 8.0, 4.5
+        w, h = 8.0 * _UI_SCALE, 4.5 * _UI_SCALE
         cx = self.width() - 13.0
         cy = self.height() / 2.0 + 0.5
         path = QtGui.QPainterPath()
@@ -719,7 +948,7 @@ class TitleMark(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super(TitleMark, self).__init__(parent)
-        self.setFixedSize(4, 14)
+        self.setFixedSize(px(4), px(14))
 
     def paintEvent(self, e):
         p = QtGui.QPainter(self)
@@ -734,7 +963,7 @@ def make_title_row(title, name="cardTitle"):
     u"""[▍TITLE] の見出し行。戻り値 (layout, label)。"""
     row = QtWidgets.QHBoxLayout()
     row.setContentsMargins(0, 0, 0, 0)
-    row.setSpacing(8)
+    row.setSpacing(px(8))
     row.addWidget(TitleMark(), 0, QtCore.Qt.AlignVCenter)
     lab = make_title_label(title, name)
     row.addWidget(lab, 0, QtCore.Qt.AlignVCenter)
@@ -748,8 +977,8 @@ class Card(QtWidgets.QFrame):
         super(Card, self).__init__(parent)
         self.setObjectName("card")
         outer = QtWidgets.QVBoxLayout(self)
-        outer.setContentsMargins(14, 12, 14, 14)
-        outer.setSpacing(10)
+        outer.setContentsMargins(px(14), px(12), px(14), px(14))
+        outer.setSpacing(px(10))
 
         if title:
             row, self._titleLabel = make_title_row(title)
@@ -783,6 +1012,7 @@ class ChevronButton(QtWidgets.QToolButton):
 
     def __init__(self, parent=None):
         super(ChevronButton, self).__init__(parent)
+        self.SIZE = px(ChevronButton.SIZE)
         self.setObjectName("chevron")
         self.setCursor(QtCore.Qt.PointingHandCursor)
         self.setFixedSize(self.SIZE, self.SIZE)

@@ -30,7 +30,7 @@ restart() はパッケージ自身も含めて sys.modules から破棄し、親
 """
 from __future__ import absolute_import
 
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 _instance = None
 
@@ -44,7 +44,11 @@ def _restore_language():
     try:
         from . import settings as _st
         from . import i18n as _i18n
-        _i18n.set_language(str((_st.load() or {}).get("language", "system")))
+        from . import style as _style
+        data = _st.load() or {}
+        _i18n.set_language(str(data.get("language", "system")))
+        # UI 倍率(0.9.x)もスタイル生成前に復元する(ToolBox 側でも同じ値を再適用する)
+        _style.set_ui_scale(data.get("uiScale", _style.UI_SCALE_DEFAULT))
     except Exception:
         pass
 
@@ -52,7 +56,7 @@ def _restore_language():
 def _disk_version():
     u"""ディスク上(インストール先)の __init__.py の __version__。読めなければ None。
     import 済みのこの値(__version__)はディスクを更新しても変わらないため、
-    show() の入口で両者を比べて更新の取りこぼしを検出する(継続84)。"""
+    show() の入口で両者を比べて更新の取りこぼしを検出する。"""
     import io
     import os
     import re

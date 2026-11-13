@@ -5,7 +5,7 @@ plsCamView.i18n
 UI 表示言語「システム / 日本語 / English」(v1.8.1)。plsCamView 単体で完結する小さな辞書方式で、
 翻訳フレームワークや外部ファイルは使わない。
 
-仕様(本人指示 2026-10-20):
+仕様(2026-10-20):
   言語設定   : settings の "language" = "system"(既定) / "ja" / "en"。保存され、次回起動で復元。
   system 判定: 1) maya.cmds.about(uiLanguage=True) (例 "ja_JP" / "en_US")
                2) 取れなければ QtCore.QLocale.system().name()
@@ -16,16 +16,16 @@ UI 表示言語「システム / 日本語 / English」(v1.8.1)。plsCamView 単
                ソースは日本語と英語が混在しているため、両方向の辞書を持つ。
   翻訳対象   : メニュー / ラベル / tooltip / ダイアログ / ユーザー向けエラー文(warning・
                例外メッセージ・進行ダイアログ)。ツールボックスの全カードと CameraBar・
-               Playblast / 複数書き出し / フックのユーザー向けメッセージを含む(継続63)。
+               Playblast / 複数書き出し / フックのユーザー向けメッセージを含む。
   翻訳しない : 製品名(plsCamView 等)・材質名・カメラ名・パネル名・パス・数値・ユーザー入力・
                ログ用の識別子。これらは tr() を通さない(呼び出し側の契約)。
                Script Editor の工程ログ(_log / _info / print)と diagnose の診断出力、
                Settings 要約の値表記(MP4 / 1920×1080 / scene / CRF 等)は値のため対象外。
                折り畳みカードの要約(mask/frame・off・ガイド名)は**ユーザー表示なので翻訳対象**
-               (数値・px・% は原表記のまま。継続65 監督指摘で追加)。
+               (数値・px・% は原表記のまま)。
                "Playblast" / "CRF" / "FPS" / "MP4" は Maya の機能名・技術用語として両言語で同表記。
                "Force Playblast Target" / "From Render Settings" は**設定ラベルとして和訳**し、
-               Maya 標準項目との対応説明(原名)は tooltip に保持する(継続65 監督指摘)。
+               Maya 標準項目との対応説明(原名)は tooltip に保持する。
   反映の時点 : ダイアログ・警告・新しく作る UI は即時。既に開いているウィンドウの文言は
                次に開き直したときに適用(言語を変えた際にその旨を表示する)。Maya の再起動は不要。
 """
@@ -91,7 +91,7 @@ def tr(text):
 
 
 # --------------------------------------------------------------------------
-#  辞書(ソース文字列そのものがキー。v1.8.1 継続63 で全ユーザー表示へ拡大:
+#  辞書(ソース文字列そのものがキー。v1.8.1 で全ユーザー表示へ拡大:
 #  全カード / CameraBar / ダイアログ / ユーザー向けエラー。
 #  対象外の線引きはモジュール docstring を参照)
 # --------------------------------------------------------------------------
@@ -139,6 +139,8 @@ EN_TO_JA = {
     u"Polygon": u"ポリゴン",
     u"Color": u"色",
     u"Multi": u"複数",
+    u"Time Range": u"時間範囲",
+    u"Output": u"出力",
 }
 
 # 日本語キー → English(ソースが日本語表記の箇所)
@@ -208,7 +210,7 @@ JA_TO_EN = {
         u"Force Playblast Target: while ON, Maya standard / external playblasts go to the last added target\neven when this view is not active. Use this tool's run button for multiple outputs.",
     u"ONで複数の対象を選択。OFFでは最後に選択した対象1つに戻します。":
         u"ON: select multiple targets. OFF: back to the single last-selected target.",
-    u"合成": u"Combine",
+    u"合成": u"Merge",
     u"選択した複数ビューの位置・比率で動画を合成（_Multi.mp4）。画像は引き伸ばしません。":
         u"Compose one video from the selected views' layout (_Multi.mp4). Images are not stretched.",
     u"個別保持": u"Keep each",
@@ -231,8 +233,15 @@ JA_TO_EN = {
     u"出力先。空なら <プロジェクト>/movies/<シーン>_<カメラ>":
         u"Output path. Empty = <project>/movies/<scene>_<camera>.",
     u"出力先を選択": u"Choose the output path",
+    u"範囲": u"Range",                     # g3: Time Range の範囲行
+    u"{} フレーム": u"{} frames",
+    u"出力形式": u"Format",
+    u"解像度": u"Resolution",
+    u"レンダー設定": u"Render Settings",
     u"Maya 標準 Playblast の「Display size: From Render Settings」と同じ。\n幅/高さをレンダー設定の解像度にし、オーバースキャン 1.0・パン/ズーム無効で書き出す\n= レゾリューションゲート(最終描画範囲)ぴったりの動画。幅/高さの欄は無視される。":
         u"Same as Maya's playblast \"Display size: From Render Settings\".\nUses the render-settings resolution with overscan 1.0 and pan/zoom disabled\n= a video that matches the resolution gate exactly. The width/height fields are ignored.",
+    u"撮影オプション": u"Capture options",
+    u"すべて OFF": u"All off",
     u"装飾 (HUD)": u"Ornaments (HUD)",
     u"showOrnaments: HUD やカメラ名などを写す": u"showOrnaments: capture HUD, camera name, etc.",
     u"オフスクリーン": u"Off screen",
@@ -241,7 +250,7 @@ JA_TO_EN = {
     u"ビューポート最適化": u"Optimize viewport",
     u"書き出し中のみ、画角をレンダー枠に固定 / Polygon のみ表示 /\nUse All Lights / SSAO・線 AA・MSAA を ON にし、完了後に元へ戻します。":
         u"Only while exporting: lock the view to the render frame, show polygons only,\nuse all lights and enable SSAO / line AA / MSAA, then restore everything afterwards.",
-    u"PNG を残す": u"Keep PNG frames",
+    u"PNG を残す": u"Keep PNGs",
     u"中間の PNG 連番(一時フォルダ)を削除しない(MP4 のみ)":
         u"Do not delete the intermediate PNG sequence (temp folder) (MP4 only).",
     u"完了後に開く": u"Open when done",
@@ -283,6 +292,17 @@ JA_TO_EN = {
     u"カメラの親を識別できません: {}": u"Cannot resolve the camera's parent: {}",
     u"対象ビューを表示してから合成してください。": u"Show the target views before combining.",
     u"カメラ切替に失敗: {}": u"Failed to switch the camera: {}",
+    u"新規カメラを作成できませんでした: {}": u"Could not create a new camera: {}",
+    u"新規カメラ {} を作成しましたが、このビューへ切り替えられませんでした": u"Created new camera {}, but could not switch this view to it",
+    u"新規カメラを作成して、このビューへ切り替える": u"Create a new camera and switch this view to it",
+    u"選択を取得できないため、新規カメラを作成しませんでした: {}": u"Could not read the selection, so no new camera was created: {}",
+    u"Undo チャンクを開始できないため、新規カメラを作成しませんでした: {}": u"Could not open an undo chunk, so no new camera was created: {}",
+    u"選択を取得できません": u"cannot read the selection",
+    u"Undo チャンクを開始できません": u"cannot open an undo chunk",
+    u"カメラが返されませんでした": u"no camera was returned",
+    u"選択を復元できませんでした": u"could not restore the selection",
+    u"Undo チャンクを閉じられませんでした": u"could not close the undo chunk",
+    u"新規カメラ {} を作成しましたが、{}。このビューは切り替えません": u"Created new camera {}, but {}. This view was not switched",
     u"Show プリセット適用に失敗: {}": u"Failed to apply the Show preset: {}",
     u"Shadow の切替に失敗: {}": u"Failed to toggle shadows: {}",
     u"{} の設定に失敗: {}": u"Failed to set {}: {}",
@@ -364,4 +384,83 @@ JA_TO_EN = {
     u"Playblast フックの解除に失敗: {}": u"Failed to remove the Playblast hook: {}",
     u"Playblast の対象パネルが見つかりません。": u"No target panel for Playblast.",
     u"Playblast オプションの表示に失敗: {}": u"Failed to open the Playblast options: {}",
+
+    # UI 倍率(0.9.1)
+    u"(標準)": u" (default)",
+    u"標準({}%)へ戻す": u"Reset to default ({}%)",
+    u"開き直して適用": u"Reopen to apply",
+    u"保存した倍率でウィンドウを開き直します(未保存の設定は自動保存されます)": u"Reopen the window with the saved scale (unsaved settings are saved automatically)",
+    u"表示設定 — UI 倍率(75〜125%)。適用は開き直しで行います": u"Display settings — UI scale (75–125%). Applied when the window is reopened",
+    u"UI 倍率 {}% を保存しました。歯車メニューの「開き直して適用」または次回起動で適用されます": u"UI scale {}% saved. It takes effect via \"Reopen to apply\" in the gear menu or on the next launch",
+    u"Language — UI の表示言語。システム = Maya / OS の言語に従う": u"Language — UI display language. System = follow the Maya / OS language",
+
+    # ---- Playblast: Time Range / Output / 寸法・出力保護(0.x)----
+    u"シーン範囲": u"Scene",
+    u"ON: 撮影時点のシーンの再生範囲を使う。OFF: 開始 / 終了フレームを指定する。":
+        u"ON: use the scene playback range at capture time. OFF: set start / end frames.",
+    u"開始": u"Start",
+    u"終了": u"End",
+    u"Playblast を畳む / 開く": u"Collapse / expand Playblast",
+    u"設定値が不正です: {}": u"Invalid setting: {}",
+    u"PNG 連番が足りません({}/{} 枚)。取り消された可能性があります。":
+        u"PNG sequence is incomplete ({}/{} frames). It may have been cancelled.",
+    u"画像連番を確認できません: {}": u"Cannot verify the image sequence: {}",
+    u"動画が作成されませんでした。": u"The video was not created.",
+    u"動画の寸法が想定と違います: {}x{}(想定 {}x{})":
+        u"The video size is not what was expected: {}x{} (expected {}x{})",
+    u"動画の寸法を確認できませんでした(公開しません。既存の動画はそのままです)。":
+        u"Could not verify the video size, so it was not published (any existing video is untouched).",
+    u"動画を書き出せませんでした: {}": u"Could not write the video: {}",
+    u"合成動画の寸法が想定と違います: {}x{}(想定 {}x{})":
+        u"The combined video size is not what was expected: {}x{} (expected {}x{})",
+    u"合成動画の寸法を確認できませんでした(公開しません)。":
+        u"Could not verify the combined video size, so it was not published.",
+
+    # ---- Show: 全ビューへの反映 ----
+    u"Show を反映・確認できなかったビュー: {}": u"Views where Show could not be applied or verified: {}",
+    u"ビューにより状態が異なります(押すと全ビューを ON にします)":
+        u"State differs between views (click to turn ON in all views)",
+    u"状態を取得できないビューがあります(押すと全ビューを ON にします)":
+        u"Some views cannot be read (click to turn ON in all views)",
+    u"調整プリセット(Effects の値と ON/OFF)。選ぶと保存した値を適用します": u"Adjustment presets (Effects values and ON/OFF). Choosing one applies its saved values",
+    u"— プリセット —": u"— Preset —",
+    u"現在の値を新しいプリセットとして保存": u"Save current values as a new preset",
+    u"選択中のプリセットを現在の値で更新": u"Update the selected preset with current values",
+    u"選択中のプリセットの保存値へ戻す(保存値は変えません)": u"Return to the selected preset's saved values (saved values are not changed)",
+    u"プリセットの保存": u"Save preset",
+    u"名前": u"Name",
+    u"名前が空です": u"The name is empty",
+    u"名前は {} 文字以内にしてください": u"Use {} characters or fewer for the name",
+    u"使えない文字が含まれています": u"The name contains characters that cannot be used",
+    u"同じ名前があります": u"That name already exists",
+    u"更新するプリセットを選んでください": u"Select a preset to update",
+    u"プリセットが選ばれていません": u"No preset is selected",
+    u"プリセットを読めません": u"Cannot read the preset",
+    u"現在の値に不正な項目があるため保存できません": u"Cannot save: some current values are invalid",
+    u"保存に失敗しました。プリセットは変更していません": u"Save failed. The presets were not changed",
+    u"「{}」を保存しました": u"Saved \"{}\"",
+    u"「{}」を更新しました": u"Updated \"{}\"",
+    u"「{}」を適用しました": u"Applied \"{}\"",
+    u"「{}」の保存値へ戻しました": u"Returned to the saved values of \"{}\"",
+    u"「{}」を適用できませんでした。元の値に戻しました": u"Could not apply \"{}\". Restored the previous values",
+    u"プリセットの適用に失敗しました: {}": u"Failed to apply the preset: {}",
+    u"設定の保存に失敗しました: {}": u"Failed to save settings: {}",
+    u"Maya へ反映できないプリセットの項目があります": u"Some preset items could not be applied to Maya",
+    u"保存済みプリセットの形式が不正なため保存できません(元のデータは変更していません)": u"Cannot save: the stored preset table is malformed (the original data was left untouched)",
+    u"選択は外しましたが、設定を保存できませんでした(再起動後は元の選択に戻る可能性があります)": u"The selection was cleared, but settings could not be saved (it may return to the previous selection after a restart)",
+    u"「{}」を適用できず、Maya 側を元の値へ戻せませんでした(設定の値は元に戻しました。表示が元と違う可能性があります)": u"Could not apply \"{}\" and could not restore Maya to the previous values (the settings values were restored; what is shown may differ)",
+    u"「{}」の値を設定しましたが、設定を保存できませんでした(Maya へは未適用。再起動後は戻る可能性があります)": u"Set the values of \"{}\", but settings could not be saved (not applied to Maya; may revert after a restart)",
+    u"「{}」を適用しましたが、設定を保存できませんでした(再起動後は戻る可能性があります)": u"Applied \"{}\", but settings could not be saved (may revert after a restart)",
+    u"「{}」の値を設定しました。Maya へは未適用です(プラグイン未ロード。ロード後に反映されます)": u"Set the values of \"{}\". Not applied to Maya yet (plug-in not loaded; applied when it loads)",
+    u"保存済": u"Saved",
+    u"更新済": u"Updated",
+    u"適用済": u"Applied",
+    u"復元": u"Restored",
+    u"「{}」を適用できませんでした。設定の値は元に戻しましたが、Maya 側が元に戻ったかは確認できていません(プラグイン未ロードなど)": u"Could not apply \"{}\". The settings values were restored, but it could not be confirmed that Maya went back (plug-in not loaded, etc.)",
+    u"未確認": u"Unconfirmed",
+    u"保留": u"Pending",
+    u"未保存": u"Unsaved",
+    u"失敗": u"Failed",
+    u"未復帰": u"Not restored",
+    u"不可": u"Not allowed",
 }
