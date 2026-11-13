@@ -134,6 +134,36 @@ class MultiUI(unittest.TestCase):
             Window.do_playblast_mp4(owner, combine=False, keep_individuals=False)
             owner._playblast_multiple.assert_called_once_with({'output_path':'x.mp4','camera':'|cam0'}, False, False)
             self.assertEqual(run.call_count, 1)
+    def _multi_owner(self):
+        owner = types.SimpleNamespace(toolbox=None, views=Mock(), _playblastBusy=False, suppress_gate=Mock())
+        owner.views.playblast_targets.return_value = [dict(camera='|a', panel='p1', rect=(0, 0, 1, 1)),
+                                                      dict(camera='|b', panel='p2', rect=(1, 0, 1, 1))]
+        return owner
+    def test_existing_output_asks_and_no_cancels(self):
+        owner = self._multi_owner()
+        with patch.object(ui.multiblast, 'existing_outputs', return_value=['C:/out/shot_Multi.mp4']), \
+             patch.object(ui.multiblast, 'run') as run, patch.object(ui, 'cmds', Mock()), \
+             patch.object(QtWidgets.QMessageBox, 'question', return_value=QtWidgets.QMessageBox.No) as ask:
+            ok, msg, _ = Window._playblast_multiple(owner, {'output_path': 'C:/out/shot.mp4'}, True, True)
+        self.assertFalse(ok)
+        ask.assert_called_once()
+        self.assertIn('shot_Multi.mp4', ask.call_args[0][2])
+        run.assert_not_called()
+    def test_existing_output_yes_overwrites(self):
+        owner = self._multi_owner()
+        with patch.object(ui.multiblast, 'existing_outputs', return_value=['C:/out/shot_Multi.mp4']), \
+             patch.object(ui.multiblast, 'run', return_value=(True, 'ok', 'x')) as run, patch.object(ui, 'cmds', Mock()), \
+             patch.object(QtWidgets.QMessageBox, 'question', return_value=QtWidgets.QMessageBox.Yes):
+            self.assertTrue(Window._playblast_multiple(owner, {'output_path': 'C:/out/shot.mp4'}, True, True)[0])
+        self.assertTrue(run.call_args.kwargs['overwrite'])
+    def test_no_existing_output_does_not_ask(self):
+        owner = self._multi_owner()
+        with patch.object(ui.multiblast, 'existing_outputs', return_value=[]), \
+             patch.object(ui.multiblast, 'run', return_value=(True, 'ok', 'x')) as run, patch.object(ui, 'cmds', Mock()), \
+             patch.object(QtWidgets.QMessageBox, 'question') as ask:
+            Window._playblast_multiple(owner, {'output_path': 'C:/out/shot.mp4'}, True, True)
+        ask.assert_not_called()
+        self.assertFalse(run.call_args.kwargs['overwrite'])
     def test_explicit_batch_panel_survives_force_hook(self):
         hook = ui.pbh
         kw = {'editorPanelName': 'batchPanel'}

@@ -248,8 +248,8 @@ JA_TO_EN = {
     u"offScreen: 他ウィンドウの重なりに影響されない":
         u"offScreen: not affected by overlapping windows.",
     u"ビューポート最適化": u"Optimize viewport",
-    u"書き出し中のみ、画角をレンダー枠に固定 / Polygon のみ表示 /\nUse All Lights / SSAO・線 AA・MSAA を ON にし、完了後に元へ戻します。":
-        u"Only while exporting: lock the view to the render frame, show polygons only,\nuse all lights and enable SSAO / line AA / MSAA, then restore everything afterwards.",
+    u"書き出し中のみ、画角をレンダー枠に固定 / Polygon とイメージプレーンのみ表示 /\nUse All Lights にし、完了後に元へ戻します。SSAO・AA は Effects の設定のまま撮ります。":
+        u"Only while exporting: lock the view to the render frame, show only polygons and image planes,\nand use all lights, then restore everything afterwards. SSAO / AA follow the Effects settings.",
     u"PNG を残す": u"Keep PNGs",
     u"中間の PNG 連番(一時フォルダ)を削除しない(MP4 のみ)":
         u"Do not delete the intermediate PNG sequence (temp folder) (MP4 only).",
@@ -354,6 +354,11 @@ JA_TO_EN = {
         u"Specify the output as a file name, not a folder.",
     u"出力が既に存在します。別の出力名を指定してください: {}":
         u"The output already exists. Use a different name: {}",
+    u"上書きの確認": u"Confirm overwrite",
+    u"次のファイルが既にあります。上書きしますか？\n{}\n\n{}":
+        u"These files already exist. Overwrite them?\n{}\n\n{}",
+    u"…ほか {} 件": u"…and {} more",
+    u"上書きせずに取り消しました。": u"Cancelled without overwriting.",
     u"FPSは正の数にしてください。": u"FPS must be a positive number.",
     u"複数書き出しの範囲は整数フレームの開始≦終了にしてください。":
         u"The multi-export range must be integer frames with start <= end.",

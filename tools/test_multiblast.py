@@ -132,6 +132,36 @@ class Batch(unittest.TestCase):
         self.assertFalse(m.run(self.targets, **self.options)[0])
         self.assertEqual(old.read_bytes(), b'original')
         self.assertFalse(self.calls)
+    def test_existing_outputs_lists_only_published(self):
+        (self.root / 'shot_suffix_Multi.mp4').write_bytes(b'old')
+        (self.root / 'shot_suffix_front.mp4').write_bytes(b'old')
+        names = lambda **kw: sorted(Path(p).name for p in m.existing_outputs(self.targets, **dict(self.options, **kw)))
+        self.assertEqual(names(), ['shot_suffix_Multi.mp4', 'shot_suffix_front.mp4'])
+        # 合成のみ: 個別は公開しないので衝突に数えない
+        self.assertEqual(names(keep_individuals=False), ['shot_suffix_Multi.mp4'])
+    def test_overwrite_after_confirmation(self):
+        old = self.root / 'shot_suffix_Multi.mp4'
+        old.write_bytes(b'original')
+        ok, msg, out = m.run(self.targets, overwrite=True, **self.options)
+        self.assertTrue(ok, msg)
+        self.assertEqual(old.read_bytes(), b'composite')
+        self.assertEqual((self.root / 'shot_suffix_front.mp4').read_bytes(), b'video')
+        self.assertFalse(list(self.root.glob('.plsMulti-*')))
+    def test_overwrite_does_not_replace_file_created_after_confirmation(self):
+        real_publish = m._publish
+        def race(src, dst, *rest):
+            if Path(dst).name == 'shot_suffix_front.mp4':
+                Path(dst).write_bytes(b'other job')
+            real_publish(src, dst, *rest)
+        (self.root / 'shot_suffix_Multi.mp4').write_bytes(b'original')
+        with patch.object(m, '_publish', side_effect=race):
+            ok, msg, recovery = m.run(self.targets, overwrite=True, **self.options)
+        self.assertFalse(ok)
+        self.assertEqual((self.root / 'shot_suffix_front.mp4').read_bytes(), b'other job')
+    def test_combined_only_ignores_old_individuals(self):
+        (self.root / 'shot_suffix_front.mp4').write_bytes(b'keep')
+        self.assertTrue(m.run(self.targets, keep_individuals=False, **self.options)[0])
+        self.assertEqual((self.root / 'shot_suffix_front.mp4').read_bytes(), b'keep')
     def test_missing_ffmpeg_stops_before_capture(self):
         mb.find_ffmpeg.return_value = None
         self.assertFalse(m.run(self.targets, **self.options)[0])
@@ -165,9 +195,9 @@ class Batch(unittest.TestCase):
         self.assertTrue(Path(recovery).exists())
     def test_publish_race_does_not_overwrite(self):
         real_publish = m._publish
-        def race(src, dst):
+        def race(src, dst, *rest):
             Path(dst).write_bytes(b'other job')
-            real_publish(src, dst)
+            real_publish(src, dst, *rest)
         with patch.object(m, '_publish', side_effect=race):
             ok, msg, recovery = m.run(self.targets, **self.options)
         self.assertFalse(ok)

@@ -14,7 +14,7 @@ Playblast 対象の固定、MP4 書き出しまでを 1 つのウィンドウで
 > switch that pins every playblast — from Maya's own menu or from your own Python
 > tools — to this view. MP4 export via ffmpeg. All state is persisted.
 
-**バージョン 0.9.1 ／ MIT License**
+**バージョン 0.9.2 ／ MIT License**
 
 📖 **全機能ガイド**: [日本語](docs/USER_GUIDE_ja.md) ／ **Full user guide**: [English](docs/USER_GUIDE_en.md)
 

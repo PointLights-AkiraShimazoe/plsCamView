@@ -62,12 +62,20 @@ _VIEWPORT_SHOW_FLAGS = [
     "grid", "manipulators",
 ]
 
-# hardwareRenderingGlobals で playblast 中に 1 へ変更する属性
-_HWR_ATTRS = ["ssaoEnable", "lineAAEnable", "multiSampleEnable"]
+# ビューポート最適化でも触らない表示フラグ(ビューの今の状態のまま撮る)。
+# imagePlane はカメラ背景なので、Polygon のみにしても消さない(2026-11-13 本人報告: Playblast で背景が映らない)。
+_VIEWPORT_KEEP_FLAGS = ("imagePlane",)
 
-# 画角をレンダー枠(解像度ゲート)に固定するためのカメラ属性
+# hardwareRenderingGlobals で playblast 中に 1 へ変更する属性。
+# 2026-11-13 空にした: SSAO を強制 ON にすると背景の大きなメッシュ(遠景の球)が真っ黒になり、ビューと別物の絵になった
+# (本人報告。最適化の要素を 1 つずつ当てて撮り、VP2 設定だけで再現)。SSAO / AA はツール欄の Effects で利用者が決めた値のまま撮る。
+_HWR_ATTRS = []
+
+# 画角をレンダー枠(解像度ゲート)に固定するためのカメラ属性。
+# 画角はオーバースキャン 1.0 と書き出しサイズで決まり、解像度ゲートの表示有無では変わらない(VP2 の視錐台は表示に依存しない)。
+# 2026-11-13: 表示 ON だと Maya がゲート枠と「960 x 540」の緑文字を画像に描くので、書き出し中は OFF にする(本人指示)。
 _CAM_GATE_APPLY = [
-    ("displayResolution", 1),
+    ("displayResolution", 0),
     ("overscan", 1.0),
     ("displayGateMask", 0),
     ("displayGateMaskOpacity", 0),
@@ -253,10 +261,10 @@ def _panel_camera_shape(panel):
 # --------------------------------------------------------------------------
 #  From Render Settings(レンダー解像度・ゲート一致の書き出し)  0.2.16
 #  Maya 標準 Playblast の「Display size: From Render Settings」と同じ意味。
-#  サイズを defaultResolution に合わせ、オーバースキャン 1.0・解像度ゲート表示・
+#  サイズを defaultResolution に合わせ、オーバースキャン 1.0・解像度ゲート表示 OFF・
 #  パン/ズーム無効にして、書き出し範囲 = レゾリューションゲートにする。
 # --------------------------------------------------------------------------
-_FINAL_FRAME_ATTRS = [("overscan", 1.0), ("displayResolution", 1), ("panZoomEnabled", 0)]
+_FINAL_FRAME_ATTRS = [("overscan", 1.0), ("displayResolution", 0), ("panZoomEnabled", 0)]   # 解像度ゲートの表示は OFF(枠と寸法の文字を写さない。2026-11-13)
 
 
 def render_settings_size():
@@ -349,6 +357,8 @@ def apply_optimized_state(state):
             except Exception:
                 pass
     for flag in state.get("show_flags", {}):
+        if flag in _VIEWPORT_KEEP_FLAGS:
+            continue
         try:
             cmds.modelEditor(panel, e=True, **{flag: (flag == "polymeshes")})
         except Exception:

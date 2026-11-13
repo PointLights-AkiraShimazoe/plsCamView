@@ -311,7 +311,7 @@ Capture with **[Run Playblast]** in the toolbox (the same button for every forma
 |---|---|
 | Ornaments (HUD) | `showOrnaments` (HUD, camera name, …) |
 | Off screen | `offScreen` (unaffected by overlapping windows) |
-| Optimize viewport | during export only: lock the view to the render frame (resolution gate) / polygons only / Use All Lights / SSAO + line AA + MSAA on — restored afterwards |
+| Optimize viewport | during export only: lock the view to the render frame (resolution gate) / polygons and image planes only / Use All Lights — restored afterwards. SSAO / AA follow the Effects settings |
 
 All values are saved automatically.
 
@@ -322,8 +322,8 @@ All values are saved automatically.
 Turn **Multi** on to select several targets with **● PLAYBLAST** on each view's camera
 bar (up to 4); they are captured in sequence. With **Merge** on, the outputs are
 combined into a single `_Multi.mp4` that keeps each view's on-screen position and
-proportions; **Keep each** also saves each camera's own movie. Existing outputs are
-never overwritten. For the full rules (naming, duplicate camera names, what is preserved
+proportions; **Keep each** also saves each camera's own movie. If outputs with the same
+names already exist, you are asked before they are overwritten. For the full rules (naming, duplicate camera names, what is preserved
 on cancel/failure) see [MULTI_PLAYBLAST.md](MULTI_PLAYBLAST.md).
 
 ### What MP4 export needs (ffmpeg)

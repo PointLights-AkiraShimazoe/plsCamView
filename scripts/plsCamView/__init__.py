@@ -30,7 +30,7 @@ restart() はパッケージ自身も含めて sys.modules から破棄し、親
 """
 from __future__ import absolute_import
 
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 
 _instance = None
 

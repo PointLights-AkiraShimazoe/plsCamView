@@ -1891,8 +1891,8 @@ class ToolBox(QtWidgets.QWidget):
         cap.addWidget(self.mp4OffScreen)
         self.mp4Optimize = style.ToggleSwitch(tr(u"ビューポート最適化"))
         self.mp4Optimize.setToolTip(
-            tr(u"書き出し中のみ、画角をレンダー枠に固定 / Polygon のみ表示 /\n"
-               u"Use All Lights / SSAO・線 AA・MSAA を ON にし、完了後に元へ戻します。"))
+            tr(u"書き出し中のみ、画角をレンダー枠に固定 / Polygon とイメージプレーンのみ表示 /\n"
+               u"Use All Lights にし、完了後に元へ戻します。SSAO・AA は Effects の設定のまま撮ります。"))
         cap.addWidget(self.mp4Optimize)
         for w in (self.mp4Ornaments, self.mp4OffScreen, self.mp4Optimize):
             w.toggled.connect(self._update_capture_summary)
@@ -3146,6 +3146,30 @@ class PlsCamViewWindow(object):
         except Exception as exc:
             cmds.warning(str(exc))
             return False, str(exc), ""
+        # 既存の出力があれば止めずに上書きの確認を出す(2026-11-13 本人指示)。
+        # 名前の不正などはここでは握り、run 側の検査とメッセージに任せる。
+        overwrite = False
+        try:
+            existing = multiblast.existing_outputs(targets, combine=combine,
+                                                   keep_individuals=keep_individuals, **options)
+        except ValueError:
+            existing = []
+        if existing:
+            import os
+            names = [os.path.basename(p) for p in existing]
+            shown = u"\n".join(names[:8])
+            if len(names) > 8:
+                shown += u"\n" + tr(u"…ほか {} 件").format(len(names) - 8)
+            answer = QtWidgets.QMessageBox.question(
+                self.toolbox, tr(u"上書きの確認"),
+                tr(u"次のファイルが既にあります。上書きしますか？\n{}\n\n{}").format(
+                    os.path.dirname(existing[0]), shown),
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
+            if answer != QtWidgets.QMessageBox.Yes:
+                msg = tr(u"上書きせずに取り消しました。")
+                cmds.inViewMessage(amg=msg, pos="botCenter", fade=True)
+                return False, msg, ""
+            overwrite = True
         progress = QtWidgets.QProgressDialog(tr(u"準備中"), tr(u"取消"), 0, 0, self.toolbox)
         progress.setWindowTitle(tr(u"複数カメラ Playblast"))
         progress.setWindowModality(QtCore.Qt.ApplicationModal)
@@ -3157,7 +3181,8 @@ class PlsCamViewWindow(object):
             QtWidgets.QApplication.processEvents()
         try:
             result = multiblast.run(targets, combine=combine, keep_individuals=keep_individuals,
-                                    cancelled=progress.wasCanceled, progress=update, **options)
+                                    cancelled=progress.wasCanceled, progress=update,
+                                    overwrite=overwrite, **options)
         finally:
             progress.close()
             progress.deleteLater()

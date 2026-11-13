@@ -119,8 +119,20 @@ def _encode(command, cancelled, progress):
             proc.communicate()
 
 
-def _publish(source, destination):
+def _publish(source, destination, replace_ok=()):
     # 事前照合後に別ジョブが作ったファイルも上書きしない。
+    # replace_ok: 利用者が上書きを確認したファイル(確認時点で存在したもの)だけは置き換える
+    # (2026-11-13 本人指示: 既存があれば止めるのではなく上書きの確認を出す)。
+    if os.path.normcase(os.path.abspath(destination)) in replace_ok and os.path.exists(destination):
+        fd, part = tempfile.mkstemp(prefix=".plsMulti-", suffix=".part", dir=os.path.dirname(destination))
+        os.close(fd)
+        try:
+            shutil.copyfile(source, part)
+            os.replace(part, destination)
+        finally:
+            if os.path.exists(part):
+                os.remove(part)
+        return
     created = False
     try:
         with open(source, "rb") as src, open(destination, "xb") as dst:
@@ -132,8 +144,47 @@ def _publish(source, destination):
         raise
 
 
-def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=None, **options):
-    """対象リストは開始時点のpanel/camera/rect。戻り値は単体runと同じ3要素。"""
+def _plan(targets, combine, keep_individuals, options):
+    u"""(directory, roots, multi, desired)。desired は今回公開する出力(拡張子なし)。名前の不正は ValueError。"""
+    if len(targets) < 2:
+        raise ValueError(tr(u"複数書き出しには2つ以上の対象が必要です。"))
+    suffixes = camera_suffixes([t["camera"] for t in targets])
+    if combine and "multi" in [s.casefold() for s in suffixes]:
+        raise ValueError(tr(u"カメラ名Multiは合成名と重なります。対象名を変更してください。"))
+    output = options.get("output_path")
+    if output:
+        base = os.path.abspath(output)
+        if os.path.isdir(base):
+            raise ValueError(tr(u"出力先はフォルダーではなくファイル名まで指定してください。"))
+        if os.path.splitext(base)[1].lower() in (".mp4", ".mov", ".avi", ".qt", ".webm"):
+            base = os.path.splitext(base)[0]
+    else:
+        base = os.path.join(mp4blast.default_output_dir(), mp4blast._scene_base_name())
+    directory = os.path.dirname(base)
+    roots = [base + "_" + s for s in suffixes]
+    multi = base + "_Multi.mp4"
+    # 公開しない個別出力(合成のみ)は衝突として数えない
+    desired = (list(roots) if (not combine or keep_individuals) else []) + \
+              ([os.path.splitext(multi)[0]] if combine else [])
+    return directory, roots, multi, desired
+
+
+def existing_outputs(targets, combine=True, keep_individuals=True, **options):
+    u"""今回の書き出しで置き換わる既存ファイルの一覧(上書き確認用)。名前の不正は ValueError。"""
+    _d, _r, _m, desired = _plan(targets, combine, keep_individuals, options)
+    found = []
+    for root in desired:
+        if os.path.isfile(root):
+            found.append(root)
+        found.extend(p for p in sorted(glob.glob(glob.escape(root) + ".*")) if os.path.isfile(p))
+        if os.path.isdir(root):
+            found.append(root)
+    return found
+
+
+def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=None, overwrite=False, **options):
+    """対象リストは開始時点のpanel/camera/rect。戻り値は単体runと同じ3要素。
+    overwrite=True は利用者が上書きを確認済み(確認時点で存在した同名ファイルだけを置き換える)。"""
     cancelled = cancelled or (lambda: False)
     progress = progress or (lambda text: None)
     recovery = ""
@@ -141,28 +192,20 @@ def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=N
     saved_time = None
     saved_focus = None
     try:
-        if len(targets) < 2:
-            raise ValueError(tr(u"複数書き出しには2つ以上の対象が必要です。"))
-        suffixes = camera_suffixes([t["camera"] for t in targets])
-        if combine and "multi" in [s.casefold() for s in suffixes]:
-            raise ValueError(tr(u"カメラ名Multiは合成名と重なります。対象名を変更してください。"))
         mode = options.get("mode", "mp4")
-        output = options.get("output_path")
-        if output:
-            base = os.path.abspath(output)
-            if os.path.isdir(base):
-                raise ValueError(tr(u"出力先はフォルダーではなくファイル名まで指定してください。"))
-            if os.path.splitext(base)[1].lower() in (".mp4", ".mov", ".avi", ".qt", ".webm"):
-                base = os.path.splitext(base)[0]
-        else:
-            base = os.path.join(mp4blast.default_output_dir(), mp4blast._scene_base_name())
-        directory = os.path.dirname(base)
-        roots = [base + "_" + s for s in suffixes]
-        multi = base + "_Multi.mp4"
-        desired = list(roots) + ([os.path.splitext(multi)[0]] if combine else [])
-        for root in desired:
-            if os.path.exists(root) or glob.glob(glob.escape(root) + ".*"):
-                raise ValueError(tr(u"出力が既に存在します。別の出力名を指定してください: {}").format(root))
+        directory, roots, multi, desired = _plan(targets, combine, keep_individuals, options)
+        existing = existing_outputs(targets, combine, keep_individuals, **options)
+        replace_ok = set()
+        if existing:
+            if not overwrite:
+                raise ValueError(tr(u"出力が既に存在します。別の出力名を指定してください: {}").format(existing[0]))
+            for path in existing:
+                if os.path.isdir(path):
+                    raise ValueError(tr(u"出力先はフォルダーではなくファイル名まで指定してください。"))
+                ok, why = mp4blast.check_output_writable(path)
+                if not ok:
+                    raise ValueError(why)
+                replace_ok.add(os.path.normcase(os.path.abspath(path)))
         # 値の検査は撮影・時刻変更・フォルダ作成の前に、単独 / Multi / Maya 標準+Combine 共通の
         # mp4blast.normalize_settings で済ませる(fps 未指定 None はシーン値、0 は失敗。
         # 端数のフレーム範囲は単独と同じく四捨五入)。ffmpeg を使わない Maya 標準(Combine なし)は
@@ -235,7 +278,7 @@ def run(targets, combine=True, keep_individuals=True, cancelled=None, progress=N
         publish = (captures if not combine or keep_individuals else []) + ([combined] if combine else [])
         for source in publish:
             destination = os.path.join(directory, os.path.basename(source))
-            _publish(source, destination)
+            _publish(source, destination, replace_ok)
             published.append(destination)
         shutil.rmtree(recovery)
         recovery = ""
